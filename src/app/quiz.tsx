@@ -14,21 +14,25 @@ import { ThemedView } from '@/components/themed-view';
 import type { WordNote } from '@/core/anki/import-words';
 import type { KanjiData } from '@/core/quiz/kanji-data';
 import { buildQuestion, type Question } from '@/core/quiz/question';
-import { changedKanji, kanjiOf, score, shuffle, type AnswerRecord, type PromptMode } from '@/core/quiz/session';
+import { knownKanjiSet } from '@/core/quiz/known-kanji';
+import { changedKanji, kanjiOf, score, type AnswerRecord } from '@/core/quiz/session';
+import { selectSession } from '@/core/quiz/srs';
+import type { Settings } from '@/core/settings';
 import { JapaneseFont, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useKanjiData } from '@/db/kanji-db';
 import { listNotes } from '@/db/notes';
-import { getUserKanji } from '@/db/user-kanji';
+import { getProgressMap, recordAnswer } from '@/db/progress';
+import { getUserFrames, getUserKanji } from '@/db/user-kanji';
 import { useTheme } from '@/hooks/use-theme';
-
-// These become settings in the next step.
-const SESSION_SIZE = 20;
-const PROMPT_MODE: PromptMode = 'both';
+import { getSettings } from '@/state/settings';
 
 interface Session {
+  /** Words to ask, in order. Words answered wrong are appended once more. */
   notes: WordNote[];
   deckWords: string[];
   known: Set<string>;
+  /** Settings at the start of the session, so changing them mid-session doesn't mix things up. */
+  settings: Settings;
 }
 
 interface Prepared {
@@ -43,6 +47,7 @@ async function prepare(note: WordNote, session: Session, data: KanjiData, db: SQ
   const question = await buildQuestion(note, data, {
     isKnown: (k) => session.known.has(k),
     deckWords: session.deckWords.filter((w) => w !== note.word),
+    difficulty: session.settings.difficulty,
   });
   const all = kanjiOf(question.options.join(''));
   const user = await getUserKanji(db, all);
@@ -78,14 +83,19 @@ export default function QuizScreen() {
   const [answers, setAnswers] = useState<AnswerRecord<WordNote>[]>([]);
 
   const loadSession = useCallback(async (): Promise<Session> => {
-    const notes = await listNotes(db);
-    const deckWords = notes.map((n) => n.word);
-    return {
-      notes: shuffle(notes).slice(0, SESSION_SIZE),
+    const settings = getSettings();
+    const all = await listNotes(db);
+    const excluded = new Set(settings.excludedDecks);
+    const notes = all.filter((n) => !excluded.has(n.deck ?? ''));
+    const deckWords = all.map((n) => n.word);
+    const known = knownKanjiSet(settings.knownKanji, settings.courseLimit, {
       deckWords,
-      known: new Set(deckWords.flatMap(kanjiOf)),
-    };
-  }, [db]);
+      userFrames: await getUserFrames(db),
+      bundled: await data.allKanji(),
+    });
+    const progress = await getProgressMap(db);
+    return { notes: selectSession(notes, progress, settings.sessionSize, Date.now()), deckWords, known, settings };
+  }, [db, data]);
 
   useEffect(() => {
     let active = true;
@@ -131,11 +141,14 @@ export default function QuizScreen() {
   function answer(optionIndex: number) {
     if (!current || chosen != null) return;
     const { question } = current;
+    const { note } = question;
+    const correct = optionIndex === question.correctIndex;
+    const retry = answers.some((a) => a.note.id === note.id);
     setChosen(optionIndex);
-    setAnswers((list) => [
-      ...list,
-      { note: question.note, chosen: question.options[optionIndex], correct: optionIndex === question.correctIndex },
-    ]);
+    setAnswers((list) => [...list, { note, chosen: question.options[optionIndex], correct, retry }]);
+    // Only the first attempt counts for spaced repetition; a missed word is asked once more at the end.
+    recordAnswer(db, note.id, correct, !retry).catch((e) => console.warn('Could not save answer', e));
+    if (!correct && !retry) setSession((s) => s && { ...s, notes: [...s.notes, note] });
     setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 100);
   }
 
@@ -159,7 +172,7 @@ export default function QuizScreen() {
 
   if (index >= session.notes.length) {
     const { correct, total } = score(answers);
-    const missed = answers.filter((a) => !a.correct);
+    const missed = answers.filter((a) => !a.correct && !a.retry);
     return (
       <ThemedView style={styles.fill}>
         <SafeAreaView edges={['bottom']} style={styles.fill}>
@@ -202,6 +215,11 @@ export default function QuizScreen() {
   };
   const breakdown = (word: string) => kanjiOf(word).map((k) => current.kanji.get(k) ?? { kanji: k });
   const chosenText = chosen != null ? question.options[chosen] : '';
+  const mode = session.settings.promptMode;
+  // A word without a translation still needs something to show.
+  const showReading = mode !== 'translation' || !note.translation;
+  const showTranslation = mode !== 'reading' && !!note.translation;
+  const isRetry = session.notes.findIndex((n) => n.id === note.id) < index;
 
   return (
     <ThemedView style={styles.fill}>
@@ -222,11 +240,14 @@ export default function QuizScreen() {
           </View>
 
           <Card style={styles.prompt}>
-            {PROMPT_MODE !== 'translation' && (
-              <Text style={[styles.reading, { color: theme.text }]}>{note.reading}</Text>
+            {isRetry && (
+              <ThemedText type="small" themeColor="textSecondary">
+                Once more
+              </ThemedText>
             )}
-            {PROMPT_MODE !== 'reading' && (
-              <ThemedText style={styles.center} themeColor={PROMPT_MODE === 'both' ? 'textSecondary' : 'text'}>
+            {showReading && <Text style={[styles.reading, { color: theme.text }]}>{note.reading}</Text>}
+            {showTranslation && (
+              <ThemedText style={styles.center} themeColor={showReading ? 'textSecondary' : 'text'}>
                 {note.translation}
               </ThemedText>
             )}

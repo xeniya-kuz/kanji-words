@@ -8,12 +8,13 @@ export interface KanjiNote {
   kanji: string;
   /** From the user's kanji deck (e.g. RTK keyword). */
   keyword?: string;
+  /** Position in the user's kanji deck (e.g. RTK frame). */
   frame?: number;
   /** English meanings from KANJIDIC2, used when there is no keyword. */
   meaning?: string;
 }
 
-/** One row per kanji: the character, its keyword (or meaning) and RTK frame. */
+/** One row per kanji: the character, its keyword (or meaning) and its number in the user's kanji deck. */
 export function KanjiBreakdown({ kanji }: { kanji: KanjiNote[] }) {
   const theme = useTheme();
   return (
@@ -25,7 +26,7 @@ export function KanjiBreakdown({ kanji }: { kanji: KanjiNote[] }) {
             <ThemedText type={k.keyword ? 'smallBold' : 'small'}>{k.keyword ?? k.meaning ?? '—'}</ThemedText>
             {k.frame != null && (
               <ThemedText type="small" themeColor="textSecondary">
-                RTK #{k.frame}
+                #{k.frame}
               </ThemedText>
             )}
           </View>

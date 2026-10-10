@@ -41,6 +41,14 @@ export async function getUserKanji(db: SQLiteDatabase, kanji: string[]): Promise
   return new Map(rows.map((r) => [r.kanji, r]));
 }
 
+/** RTK frame per kanji from the user's kanji deck. */
+export async function getUserFrames(db: SQLiteDatabase): Promise<Map<string, number>> {
+  const rows = await db.getAllAsync<{ kanji: string; frame: number }>(
+    'SELECT kanji, frame FROM user_kanji WHERE frame IS NOT NULL',
+  );
+  return new Map(rows.map((r) => [r.kanji, r.frame]));
+}
+
 export async function countUserKanji(db: SQLiteDatabase): Promise<number> {
   const row = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM user_kanji');
   return row?.n ?? 0;

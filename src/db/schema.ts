@@ -35,6 +35,25 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (kind, note_type)
   );
   `,
+  // 2: spaced repetition progress and answer history
+  `
+  CREATE TABLE progress (
+    note_id   TEXT PRIMARY KEY NOT NULL,   -- kept when notes are deleted, so a re-import restores it
+    box       INTEGER NOT NULL,
+    due_at    INTEGER NOT NULL,
+    correct   INTEGER NOT NULL,
+    wrong     INTEGER NOT NULL,
+    last_seen INTEGER NOT NULL
+  );
+
+  CREATE TABLE answer_log (
+    id          INTEGER PRIMARY KEY,
+    note_id     TEXT NOT NULL,
+    correct     INTEGER NOT NULL,
+    answered_at INTEGER NOT NULL
+  );
+  CREATE INDEX answer_log_time ON answer_log (answered_at);
+  `,
 ];
 
 /** Runs the migrations the database hasn't seen yet (tracked in PRAGMA user_version). */

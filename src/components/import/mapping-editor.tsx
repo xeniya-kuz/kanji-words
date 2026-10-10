@@ -20,8 +20,8 @@ const ROLES: Record<DeckKind, { role: Role; label: string; hint: string }[]> = {
   ],
   kanji: [
     { role: 'kanji', label: 'Kanji', hint: 'One kanji per note' },
-    { role: 'keyword', label: 'Keyword', hint: 'e.g. RTK keyword, optional' },
-    { role: 'frame', label: 'Frame number', hint: 'RTK frame, optional' },
+    { role: 'keyword', label: 'Keyword', hint: 'Keyword or meaning, optional' },
+    { role: 'frame', label: 'Order number', hint: 'Position in your course (e.g. RTK frame), optional' },
     { role: 'onyomi', label: "On'yomi", hint: 'Optional' },
     { role: 'kunyomi', label: "Kun'yomi", hint: 'Optional' },
   ],

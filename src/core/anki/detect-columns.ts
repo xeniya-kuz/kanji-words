@@ -115,7 +115,7 @@ export function detectKanjiColumns(profiles: ColumnProfile[]): ColumnMapping<Kan
     kunyomi: (p) => p.hiraganaOnly * p.fill * lengthFit(p.avgLength, 20, 80),
   }, {
     keyword: /keyword|meaning|ключ/i,
-    frame: /frame|heisig|rtk|number|index|номер/i,
+    frame: /frame|heisig|rtk|number|index|order|lesson|position|номер|урок|порядок/i,
     onyomi: /on.?yomi|onyomi|音読み/i,
     kunyomi: /kun.?yomi|kunyomi|訓読み/i,
     kanji: /^kanji$|character|漢字|иероглиф/i,

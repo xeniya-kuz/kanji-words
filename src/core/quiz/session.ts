@@ -27,8 +27,12 @@ export interface AnswerRecord<W> {
   note: W;
   chosen: string;
   correct: boolean;
+  /** A second attempt at a word missed earlier in the session; doesn't count for the score. */
+  retry?: boolean;
 }
 
+/** Score over first attempts only. */
 export function score<W>(answers: AnswerRecord<W>[]): { correct: number; total: number } {
-  return { correct: answers.filter((a) => a.correct).length, total: answers.length };
+  const first = answers.filter((a) => !a.retry);
+  return { correct: first.filter((a) => a.correct).length, total: first.length };
 }

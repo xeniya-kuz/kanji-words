@@ -7,18 +7,32 @@ import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
+import { sessionCounts } from '@/core/quiz/srs';
 import { Spacing } from '@/constants/theme';
-import { getDeckSummaries } from '@/db/notes';
+import { getDeckSummaries, listNotes } from '@/db/notes';
+import { getProgressMap } from '@/db/progress';
 import { countUserKanji } from '@/db/user-kanji';
 import { useFocusQuery } from '@/hooks/use-focus-query';
+import { useSettings } from '@/state/settings';
 import { formatDeck } from '@/utils/format';
 
 export default function PracticeScreen() {
   const db = useSQLiteContext();
-  const query = useCallback(
-    async () => ({ decks: await getDeckSummaries(db), kanjiCount: await countUserKanji(db) }),
-    [db],
-  );
+  const settings = useSettings();
+  const query = useCallback(async () => {
+    const excluded = new Set(settings.excludedDecks);
+    const notes = (await listNotes(db)).filter((n) => !excluded.has(n.deck ?? ''));
+    return {
+      decks: await getDeckSummaries(db),
+      counts: sessionCounts(
+        notes.map((n) => n.id),
+        await getProgressMap(db),
+        Date.now(),
+      ),
+      practiced: notes.length,
+      kanjiCount: await countUserKanji(db),
+    };
+  }, [db, settings.excludedDecks]);
   const { data } = useFocusQuery(query);
   const total = data?.decks.reduce((sum, d) => sum + d.count, 0) ?? 0;
 
@@ -38,27 +52,46 @@ export default function PracticeScreen() {
 
         {data && total > 0 && (
           <>
-            <Card>
-              <ThemedText type="smallBold">{total} words</ThemedText>
-              {data.decks.map((d) => (
-                <View key={d.deck} style={styles.deckRow}>
-                  <ThemedText type="small" style={styles.deckName} numberOfLines={1}>
-                    {formatDeck(d.deck)}
-                  </ThemedText>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    {d.count}
-                  </ThemedText>
-                </View>
-              ))}
+            <Card style={styles.countsCard}>
+              <Count value={data.counts.due} label="due" />
+              <Count value={data.counts.fresh} label="new" />
+              <Count value={data.counts.learned} label="learned" />
             </Card>
+
             <Card>
-              <ThemedText type="small" themeColor="textSecondary">
-                {data.kanjiCount > 0
-                  ? `Kanji deck: ${data.kanjiCount} kanji with keywords`
-                  : 'Optional: import a kanji deck (e.g. Remembering the Kanji) to see keywords.'}
+              <ThemedText type="smallBold">
+                {data.practiced === total ? `${total} words` : `${data.practiced} of ${total} words selected`}
               </ThemedText>
+              {data.decks.map((d) => {
+                const off = settings.excludedDecks.includes(d.deck);
+                return (
+                  <View key={d.deck} style={styles.deckRow}>
+                    <ThemedText
+                      type="small"
+                      themeColor={off ? 'textSecondary' : 'text'}
+                      style={styles.deckName}
+                      numberOfLines={1}>
+                      {formatDeck(d.deck)}
+                    </ThemedText>
+                    <ThemedText type="small" themeColor="textSecondary">
+                      {off ? 'off' : d.count}
+                    </ThemedText>
+                  </View>
+                );
+              })}
             </Card>
-            <Button title="Start practice" onPress={() => router.push('/quiz')} />
+
+            {data.kanjiCount === 0 && (
+              <ThemedText type="small" themeColor="textSecondary">
+                Optional: import a kanji deck (e.g. Remembering the Kanji) to see keywords.
+              </ThemedText>
+            )}
+
+            <Button
+              title={`Start practice · ${Math.min(settings.sessionSize, data.practiced)} words`}
+              disabled={data.practiced === 0}
+              onPress={() => router.push('/quiz')}
+            />
           </>
         )}
 
@@ -72,8 +105,21 @@ export default function PracticeScreen() {
   );
 }
 
+function Count({ value, label }: { value: number; label: string }) {
+  return (
+    <View style={styles.count}>
+      <ThemedText type="subtitle">{value}</ThemedText>
+      <ThemedText type="small" themeColor="textSecondary">
+        {label}
+      </ThemedText>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   content: { gap: Spacing.three, paddingBottom: Spacing.four },
+  countsCard: { flexDirection: 'row', justifyContent: 'space-around' },
+  count: { alignItems: 'center' },
   deckRow: { flexDirection: 'row', justifyContent: 'space-between', gap: Spacing.three },
   deckName: { flex: 1 },
 });

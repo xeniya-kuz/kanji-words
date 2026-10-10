@@ -9,6 +9,7 @@ import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { Furigana } from '@/components/furigana';
 import { MappingEditor } from '@/components/import/mapping-editor';
+import { Segmented } from '@/components/segmented';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import type { DeckKind } from '@/core/anki/detect-columns';
@@ -189,21 +190,14 @@ export default function ImportScreen() {
                 </ThemedText>
               </View>
 
-              <View style={styles.segmented}>
-                {(['words', 'kanji'] as const).map((kind) => (
-                  <Pressable
-                    key={kind}
-                    onPress={() => switchKind(kind)}
-                    style={[
-                      styles.segment,
-                      { backgroundColor: plan.kind === kind ? theme.accent : theme.backgroundElement },
-                    ]}>
-                    <ThemedText type="smallBold" style={{ color: plan.kind === kind ? '#ffffff' : theme.text }}>
-                      {kind === 'words' ? 'Word deck' : 'Kanji deck'}
-                    </ThemedText>
-                  </Pressable>
-                ))}
-              </View>
+              <Segmented
+                options={[
+                  { value: 'words', label: 'Word deck' },
+                  { value: 'kanji', label: 'Kanji deck' },
+                ]}
+                value={plan.kind}
+                onChange={switchKind}
+              />
 
               {plan.groups.length > 1 && (
                 <View style={styles.groups}>
@@ -312,13 +306,6 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   title: { fontSize: 28, lineHeight: 36 },
-  segmented: { flexDirection: 'row', gap: Spacing.two },
-  segment: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: Spacing.two,
-    borderRadius: Spacing.three,
-  },
   groups: { gap: Spacing.two },
   groupRow: {
     flexDirection: 'row',
