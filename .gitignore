@@ -41,3 +41,9 @@ example
 # generated native folders
 /ios
 /android
+
+# personal Anki exports used for local tests
+test-data/private/
+
+# downloaded dictionary sources for scripts/build-kanji-db.ts
+data-cache/
