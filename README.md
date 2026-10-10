@@ -1,54 +1,112 @@
 # Kanji Words
 
-An Android app for learning to recognize Japanese words by their kanji. It imports your Anki decks
-and quizzes you: you see a word's reading and/or translation and pick its correct spelling among
-four look-alike options.
+An Android app for learning to recognize Japanese words by their kanji, using your own Anki decks.
 
-Built with Expo (React Native) and TypeScript.
+You see a word's reading and/or translation and pick its correct spelling among four options. The
+wrong options look or sound like the right one, so you can't answer by the reading alone. You
+have to recognize the kanji.
 
-## Run it on your phone
+## Features
 
-1. Install **Expo Go** from Google Play.
-2. In this folder run:
-   ```sh
-   npm install
-   npx expo start
-   ```
-3. Scan the QR code with Expo Go. The phone and the computer must be on the same Wi-Fi
-   (otherwise use `npx expo start --tunnel`).
+- **Imports your Anki decks**: any word deck exported as plain text. The app detects which column
+  is the word, reading, translation and furigana (ruby or `漢字[かんじ]`), and you confirm it.
+- **Believable wrong answers** built from look-alike kanji, kanji with the same reading, real
+  homophones (期間 / 機関) and words from your decks, balanced so the answer can't be guessed from
+  which kanji repeats most.
+- **Three difficulty levels**: easy (clearly different kanji), normal (a mix), hard (the most
+  confusing look-alikes and homophones).
+- **Optional kanji deck** (e.g. Remembering the Kanji) to show keywords for each kanji and to
+  focus wrong answers on the kanji you have already learned.
+- **Spaced repetition**: words you miss come back sooner; words you know come back less often.
+- Statistics, dark mode, works fully offline.
+
+## Install on Android
+
+1. Open the APK download link on your phone and download the file.
+2. Open it. Android asks to allow installing apps from this source (your browser or file manager):
+   allow it.
+3. If Google Play Protect warns about an unknown app, choose **Install anyway**: the app isn't
+   published on Google Play, so Play doesn't know it yet.
+
+Works on Android 7 and newer.
+
+## Import your decks
+
+On a computer, in Anki:
+
+1. **File → Export**, choose your deck.
+2. Format: **Notes in Plain Text (.txt)**.
+3. Check **Include HTML and media references**, **Include unique identifier**, **Include deck name**
+   and **Include notetype name**.
+4. Copy the `.txt` file to your phone (USB, Google Drive, a messenger…).
+
+In the app: **Practice → Import Anki deck → Choose file**, check the columns and the preview, and
+tap **Import**.
+
+- A **word deck** needs a word written with kanji, its reading in kana and a translation. Words
+  written only in kana are skipped.
+- A **kanji deck** needs one kanji per note; a keyword, an order number (like an RTK frame) and
+  readings are optional.
+- Importing the same deck again updates its words and keeps your progress.
 
 ## Development
 
+Built with [Expo](https://expo.dev) (React Native) and TypeScript.
+
 ```sh
-npm test            # unit tests (Jest)
-npm run typecheck   # TypeScript
-npm run lint        # ESLint
-npm run build:kanji-db   # rebuild assets/db/kanji.db from dictionary sources
+npm install
+npx expo start          # then scan the QR code with Expo Go on your phone
+npm test                # unit tests (Jest)
+npm run typecheck       # TypeScript
+npm run lint            # ESLint
+npm run build:kanji-db  # rebuild assets/db/kanji.db from dictionary sources
+npm run build:icons     # regenerate the app icon and splash image
 ```
 
-`assets/db/kanji.db` is committed, so rebuilding is only needed to update the data. Sources and
-licenses are listed in [assets/db/README.md](assets/db/README.md).
+Real Anki exports can be put in `test-data/private/` (`words.txt`, `rtk.txt`) to run the tests on
+them. That folder is git-ignored so personal decks are never committed.
 
-Real Anki exports can be put in `test-data/private/` (`words.txt`, `rtk.txt`) to run the importer
-tests on them. That folder is git-ignored so personal decks are never committed.
+### Building the APK
 
-## Project structure
+The APK is built in the cloud with [EAS Build](https://docs.expo.dev/build/introduction/), so no
+Android Studio is needed. You need a free Expo account.
+
+```sh
+npx eas-cli@latest login
+npx eas-cli@latest build --platform android --profile preview
+```
+
+The first build links the project to your Expo account and creates the app's signing key (answer
+yes to both questions). When the build finishes, the terminal and the Expo website show a link to
+the APK, which can be shared directly. Keep using the same Expo account for later builds: the
+signing key is stored there, and Android only installs updates signed with the same key.
+
+### Project structure
 
 ```
 src/app/            screens (Expo Router: every file is a route)
-src/components/     shared UI components
-scripts/            build-kanji-db.mts (runs on plain Node 24)
-assets/db/          kanji.db: bundled kanji, look-alikes, readings, JMdict words
+src/components/     shared UI components (furigana, buttons, quiz pieces…)
 src/core/           plain TypeScript logic, no React: tested with Jest
   anki/             Anki export parsing, column detection, word and kanji importers
-  text/             HTML cleanup, furigana (ruby / 漢字[かんじ]) parsing, Japanese helpers
+  quiz/             wrong-answer generator, spaced repetition, session helpers
+  text/             HTML cleanup, furigana parsing, Japanese text helpers
+src/db/             SQLite: the app's own database and the bundled kanji database
+src/state/          settings
+scripts/            build-kanji-db.mts, build-icons.mts (plain Node 24)
+assets/db/          kanji.db: bundled kanji, look-alikes, readings, JMdict words
 ```
 
-## Importing decks
+## Data and licenses
 
-In Anki: **File → Export → Notes in Plain Text (.txt)**, with "Include HTML" and
-"Include unique identifier" checked. The app detects which column is the word, reading,
-translation and furigana and lets you confirm before importing.
+The app code is MIT licensed (see [LICENSE](LICENSE)). The bundled dictionary data is not:
 
-An optional kanji deck (e.g. Remembering the Kanji) adds keywords and frame numbers. Keywords
-come only from the user's own deck and are never bundled with the app.
+- **KANJIDIC2, KRADFILE, JMdict**: © Electronic Dictionary Research and Development Group,
+  [CC BY-SA 4.0](https://www.edrdg.org/edrdg/licence.html), via
+  [jmdict-simplified](https://github.com/scriptin/jmdict-simplified).
+- **Kanji similarity sets**: Lars Yencken,
+  [kanji confusion datasets](https://lars.yencken.org/datasets/kanji-confusion),
+  [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/).
+- **Noto Sans JP** font: Google, [SIL Open Font License](https://openfontlicense.org).
+
+Details in [assets/db/README.md](assets/db/README.md). Keywords from a user's kanji deck (such as
+Remembering the Kanji) are only ever imported by the user and never bundled with the app.

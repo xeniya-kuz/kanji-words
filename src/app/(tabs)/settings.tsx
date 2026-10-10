@@ -1,7 +1,8 @@
+import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
+import { Alert, Linking, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
@@ -17,6 +18,8 @@ import { useFocusQuery } from '@/hooks/use-focus-query';
 import { useTheme } from '@/hooks/use-theme';
 import { updateSettings, useSettings } from '@/state/settings';
 import { formatDeck } from '@/utils/format';
+
+const SOURCE_URL = 'https://github.com/xeniya-kuz/kanji-words';
 
 const DIFFICULTY_HINTS: Record<Settings['difficulty'], string> = {
   easy: 'Clearly different kanji that you know.',
@@ -203,7 +206,11 @@ export default function SettingsScreen() {
 
         <Section title="About">
           <Card>
-            <ThemedText type="small">
+            <ThemedText type="smallBold">Kanji Words {Constants.expoConfig?.version}</ThemedText>
+            <ThemedText type="small" style={{ color: theme.accent }} onPress={() => Linking.openURL(SOURCE_URL)}>
+              Source code on GitHub
+            </ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
               Kanji data: KANJIDIC2, KRADFILE and JMdict by the Electronic Dictionary Research and Development Group
               (CC BY-SA 4.0). Kanji similarity: Lars Yencken’s kanji confusion datasets (CC BY 3.0). Japanese font:
               Noto Sans JP (SIL Open Font License).

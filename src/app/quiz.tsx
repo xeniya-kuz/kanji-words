@@ -33,6 +33,8 @@ interface Session {
   known: Set<string>;
   /** Settings at the start of the session, so changing them mid-session doesn't mix things up. */
   settings: Settings;
+  /** Imported words before deck filtering, to tell "no words" from "all decks turned off". */
+  totalWords: number;
 }
 
 interface Prepared {
@@ -94,7 +96,13 @@ export default function QuizScreen() {
       bundled: await data.allKanji(),
     });
     const progress = await getProgressMap(db);
-    return { notes: selectSession(notes, progress, settings.sessionSize, Date.now()), deckWords, known, settings };
+    return {
+      notes: selectSession(notes, progress, settings.sessionSize, Date.now()),
+      deckWords,
+      known,
+      settings,
+      totalWords: all.length,
+    };
   }, [db, data]);
 
   useEffect(() => {
@@ -164,7 +172,11 @@ export default function QuizScreen() {
   if (session.notes.length === 0) {
     return (
       <Centered>
-        <ThemedText>No words yet. Import an Anki deck first.</ThemedText>
+        <ThemedText style={styles.center}>
+          {session.totalWords > 0
+            ? 'All decks are turned off. Choose decks to practice in Settings.'
+            : 'No words yet. Import an Anki deck first.'}
+        </ThemedText>
         <Button title="Back" variant="secondary" onPress={() => router.back()} />
       </Centered>
     );
