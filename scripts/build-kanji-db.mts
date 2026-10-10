@@ -21,7 +21,7 @@ const CACHE_DIR = path.join(ROOT, 'data-cache');
 const OUTPUT = path.join(ROOT, 'assets', 'db', 'kanji.db');
 
 /** Bump when the schema or content changes, so the app knows to replace its copy. */
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 const SIMPLIFIED_RELEASE = 'https://api.github.com/repos/scriptin/jmdict-simplified/releases/latest';
 const YENCKEN = 'http://lars.yencken.org/datasets/kanji-confusion';
@@ -184,7 +184,7 @@ async function main() {
   }
 
   console.log('Collecting words…');
-  const words = new Map<string, { written: string; reading: string; common: boolean }>();
+  const words = new Map<string, { entry: number; written: string; reading: string; common: boolean }>();
   for (const entry of jmdict.words) {
     for (const k of entry.kanji) {
       const chars = [...k.text];
@@ -194,10 +194,10 @@ async function main() {
         if (r.tags.includes('sk')) continue;
         if (!r.appliesToKanji.includes('*') && !r.appliesToKanji.includes(k.text)) continue;
         const reading = toHiragana(r.text);
-        const key = `${k.text}|${reading}`;
+        const key = `${entry.id}|${k.text}|${reading}`;
         const common = k.common && r.common;
         const existing = words.get(key);
-        if (!existing) words.set(key, { written: k.text, reading, common });
+        if (!existing) words.set(key, { entry: Number(entry.id), written: k.text, reading, common });
         else existing.common ||= common;
       }
     }
@@ -236,8 +236,9 @@ async function main() {
     CREATE TABLE word (
       reading TEXT NOT NULL,       -- hiragana; words are always looked up by reading
       written TEXT NOT NULL,
+      entry   INTEGER NOT NULL,    -- JMdict entry: spellings of one entry are the same word
       common  INTEGER NOT NULL,
-      PRIMARY KEY (reading, written)
+      PRIMARY KEY (reading, written, entry)
     ) WITHOUT ROWID;
   `);
 
@@ -264,8 +265,8 @@ async function main() {
     }
   }
 
-  const insertWord = db.prepare('INSERT INTO word VALUES (?, ?, ?)');
-  for (const w of words.values()) insertWord.run(w.reading, w.written, w.common ? 1 : 0);
+  const insertWord = db.prepare('INSERT INTO word VALUES (?, ?, ?, ?)');
+  for (const w of words.values()) insertWord.run(w.reading, w.written, w.entry, w.common ? 1 : 0);
   db.exec('COMMIT');
   db.exec('VACUUM');
   db.close();
