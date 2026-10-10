@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import type { FuriganaSegment } from '@/core/text/furigana';
+import { JapaneseFont } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 type FuriganaProps = {
@@ -26,11 +27,19 @@ export function Furigana({ word, reading, segments, size = 28, showReading = tru
       {parts.map((part, i) => (
         <View key={i} style={styles.segment}>
           {showReading && (
-            <Text style={{ fontSize: rubySize, lineHeight: rubySize * 1.3, color: theme.textSecondary }}>
+            <Text
+              style={{
+                fontFamily: JapaneseFont,
+                fontSize: rubySize,
+                lineHeight: rubySize * 1.4,
+                color: theme.textSecondary,
+              }}>
               {part.reading ?? ' '}
             </Text>
           )}
-          <Text style={{ fontSize: size, lineHeight: size * 1.3, color: theme.text }}>{part.text}</Text>
+          <Text style={{ fontFamily: JapaneseFont, fontSize: size, lineHeight: size * 1.4, color: theme.text }}>
+            {part.text}
+          </Text>
         </View>
       ))}
     </View>

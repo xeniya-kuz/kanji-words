@@ -36,6 +36,9 @@ export const Fonts = Platform.select({
   },
 });
 
+/** Bundled Noto Sans JP, so kanji use Japanese glyph shapes whatever the phone's language. */
+export const JapaneseFont = 'NotoSansJP';
+
 export const Spacing = {
   half: 2,
   one: 4,

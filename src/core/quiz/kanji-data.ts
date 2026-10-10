@@ -8,6 +8,8 @@ export interface KanjiInfo {
   grade: number | null;
   rtk: number | null;
   freq: number | null;
+  /** English meanings, "; " separated. */
+  meanings: string;
 }
 
 export interface DictWord {
@@ -30,7 +32,7 @@ export type SqlAll = <T>(sql: string, params: (string | number)[]) => Promise<T[
 export function createKanjiData(all: SqlAll): KanjiData {
   let infoByKanji: Promise<Map<string, KanjiInfo>> | undefined;
   const loadInfo = () =>
-    (infoByKanji ??= all<KanjiInfo>('SELECT literal, strokes, grade, rtk, freq FROM kanji', []).then(
+    (infoByKanji ??= all<KanjiInfo>('SELECT literal, strokes, grade, rtk, freq, meanings FROM kanji', []).then(
       (rows) => new Map(rows.map((r) => [r.literal, r])),
     ));
 

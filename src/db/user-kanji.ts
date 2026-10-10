@@ -25,6 +25,22 @@ export async function replaceUserKanji(db: SQLiteDatabase, entries: KanjiEntry[]
   });
 }
 
+export interface UserKanji {
+  kanji: string;
+  keyword: string | null;
+  frame: number | null;
+}
+
+/** Keywords and frames from the user's kanji deck for the given kanji. */
+export async function getUserKanji(db: SQLiteDatabase, kanji: string[]): Promise<Map<string, UserKanji>> {
+  if (kanji.length === 0) return new Map();
+  const rows = await db.getAllAsync<UserKanji>(
+    `SELECT kanji, keyword, frame FROM user_kanji WHERE kanji IN (${kanji.map(() => '?').join(', ')})`,
+    kanji,
+  );
+  return new Map(rows.map((r) => [r.kanji, r]));
+}
+
 export async function countUserKanji(db: SQLiteDatabase): Promise<number> {
   const row = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM user_kanji');
   return row?.n ?? 0;

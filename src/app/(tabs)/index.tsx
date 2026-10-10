@@ -58,7 +58,7 @@ export default function PracticeScreen() {
                   : 'Optional: import a kanji deck (e.g. Remembering the Kanji) to see keywords.'}
               </ThemedText>
             </Card>
-            <Button title="Start practice (coming soon)" disabled />
+            <Button title="Start practice" onPress={() => router.push('/quiz')} />
           </>
         )}
 
