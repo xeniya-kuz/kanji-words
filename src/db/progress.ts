@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import type { WordNote } from '@/core/anki/import-words';
+import type { WordNote } from '@/core/import/import-words';
 import { schedule, type Progress } from '@/core/quiz/srs';
 
 interface ProgressRow {

@@ -4,9 +4,9 @@
 import fs from 'fs';
 import path from 'path';
 
-import { detectWordColumns, profileColumns } from '../../anki/detect-columns';
-import { importWords } from '../../anki/import-words';
-import { parseAnkiExport } from '../../anki/parse-export';
+import { detectWordColumns, profileColumns } from '../../import/detect-columns';
+import { importWords } from '../../import/import-words';
+import { parseWordFile } from '../../import/word-file';
 import { parseFurigana } from '../../text/furigana';
 import { hasKanji } from '../../text/japanese';
 import {
@@ -202,7 +202,7 @@ describe('buildQuestion', () => {
 const wordsFile = path.join(__dirname, '../../../../test-data/private/words.txt');
 (fs.existsSync(wordsFile) ? describe : describe.skip)('real word deck', () => {
   it('builds 3 balanced distractors for every word at every difficulty', async () => {
-    const exp = parseAnkiExport(fs.readFileSync(wordsFile, 'utf8'));
+    const exp = parseWordFile(fs.readFileSync(wordsFile, 'utf8'));
     const { notes } = importWords(exp, detectWordColumns(profileColumns(exp)));
     const deckWords = notes.map((n) => n.word);
     const known = new Set(deckWords.flatMap((w) => [...w].filter(hasKanji)));

@@ -54,6 +54,10 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX answer_log_time ON answer_log (answered_at);
   `,
+  // 3: the reading as written in the deck when it has extra parts, e.g. "(に)きく"
+  `
+  ALTER TABLE note ADD COLUMN reading_label TEXT;
+  `,
 ];
 
 /** Runs the migrations the database hasn't seen yet (tracked in PRAGMA user_version). */

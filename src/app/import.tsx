@@ -12,7 +12,7 @@ import { MappingEditor } from '@/components/import/mapping-editor';
 import { Segmented } from '@/components/segmented';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import type { DeckKind } from '@/core/anki/detect-columns';
+import type { DeckKind } from '@/core/import/detect-columns';
 import {
   canImport,
   createImportPlan,
@@ -22,9 +22,9 @@ import {
   type AnyMapping,
   type ImportPlan,
   type SavedMappings,
-} from '@/core/anki/import-plan';
-import type { SkipReason } from '@/core/anki/import-words';
-import { parseAnkiExport, type AnkiExport } from '@/core/anki/parse-export';
+} from '@/core/import/import-plan';
+import type { SkipReason } from '@/core/import/import-words';
+import { parseWordFile, type WordFile } from '@/core/import/word-file';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { loadSavedMappings, saveMappings } from '@/db/import-profiles';
 import { saveNotes } from '@/db/notes';
@@ -35,7 +35,7 @@ type Stage = 'pick' | 'reading' | 'map' | 'saving' | 'done';
 
 interface Loaded {
   fileName: string;
-  exp: AnkiExport;
+  exp: WordFile;
   saved: SavedMappings;
 }
 
@@ -80,18 +80,17 @@ export default function ImportScreen() {
     try {
       const text = await file.text();
       await nextFrame();
-      const exp = parseAnkiExport(text);
-      if (exp.rows.length === 0 || exp.columnCount < 2) throw new Error('No notes found in this file.');
+      const exp = parseWordFile(text);
+      if (exp.rows.length === 0 || exp.columnCount < 2) {
+        throw new Error('No columns found: separate them with tabs, commas or semicolons.');
+      }
       const saved = await loadSavedMappings(db);
       setLoaded({ fileName: file.name, exp, saved });
       setPlan(createImportPlan(exp, saved));
       setGroupIndex(0);
       setStage('map');
     } catch (e) {
-      setError(
-        `Couldn't read "${file.name}". Export it from Anki as "Notes in Plain Text (.txt)". ` +
-          (e instanceof Error ? e.message : ''),
-      );
+      setError(`Couldn't read "${file.name}". ${e instanceof Error ? e.message : ''}`);
       setStage('pick');
     }
   }
@@ -161,22 +160,32 @@ export default function ImportScreen() {
           {stage === 'pick' && (
             <>
               <ThemedText type="subtitle" style={styles.title}>
-                Import from Anki
+                Import words
+              </ThemedText>
+              <ThemedText type="small">
+                Any text file works: one word per line, columns separated by tabs, commas or semicolons (.txt, .csv,
+                .tsv), saved as UTF-8. You confirm which column is which on the next screen.
               </ThemedText>
               <Card>
-                <ThemedText type="smallBold">In Anki on your computer</ThemedText>
-                <ThemedText type="small">1. Select the deck and choose File → Export.</ThemedText>
-                <ThemedText type="small">2. Format: Notes in Plain Text (.txt).</ThemedText>
-                <ThemedText type="small">
-                  3. Check “Include HTML and media references”, “Include unique identifier”, “Include deck name” and
-                  “Include notetype name”.
+                <ThemedText type="smallBold">A word list needs</ThemedText>
+                <ThemedText type="small">• the word written with kanji: 聞く</ThemedText>
+                <ThemedText type="small">• its reading in kana: きく</ThemedText>
+                <ThemedText type="small">• a translation in your language</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  Furigana (ruby or 漢字[かんじ]) is optional. A kanji list, one kanji per line with a keyword, adds
+                  keywords to each kanji.
                 </ThemedText>
-                <ThemedText type="small">4. Copy the .txt file to your phone.</ThemedText>
               </Card>
-              <ThemedText type="small" themeColor="textSecondary">
-                Word decks need a word, its reading and a translation. You can also import a kanji deck (such as
-                Remembering the Kanji) to see keywords for each kanji.
-              </ThemedText>
+              <Card>
+                <ThemedText type="smallBold">Where to get the file</ThemedText>
+                <ThemedText type="small">
+                  • Anki: File → Export → Notes in Plain Text, with “Include HTML”, “unique identifier”, “deck name”
+                  and “notetype name” checked.
+                </ThemedText>
+                <ThemedText type="small">• Google Sheets: File → Download → Tab-separated values (.tsv).</ThemedText>
+                <ThemedText type="small">• Excel: Save As → CSV UTF-8.</ThemedText>
+                <ThemedText type="small">• Other flashcard apps: their export to text or CSV.</ThemedText>
+              </Card>
               <Button title="Choose file" onPress={pickFile} />
             </>
           )}

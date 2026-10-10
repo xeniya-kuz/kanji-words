@@ -7,10 +7,10 @@ import {
   type FuriganaSegment,
 } from '../text/furigana';
 import { hasFuriganaMarkup, htmlToText, stripBracketFurigana } from '../text/html';
-import { hasKanji, toHiragana } from '../text/japanese';
+import { hasKanji, isKana, removeJapaneseSpaces, toHiragana } from '../text/japanese';
 import { expandVariants } from '../text/variants';
 import type { ColumnMapping, WordRole } from './detect-columns';
-import type { AnkiExport } from './parse-export';
+import type { WordFile } from './word-file';
 
 export interface WordNote {
   /** Anki GUID when available, so re-importing a deck updates notes instead of duplicating them. */
@@ -21,6 +21,8 @@ export interface WordNote {
   /** Other accepted spellings: never offered as wrong answers. */
   alternatives: string[];
   reading: string;
+  /** The reading as written in the deck when it holds more than the reading, e.g. "(に)きく". */
+  readingLabel?: string;
   translation: string;
   /** Present only when it matches both the word and the reading. */
   furigana?: FuriganaSegment[];
@@ -42,7 +44,7 @@ export interface WordImportResult {
   furiganaIgnored: number;
 }
 
-export function importWords(exp: AnkiExport, mapping: ColumnMapping<WordRole>): WordImportResult {
+export function importWords(exp: WordFile, mapping: ColumnMapping<WordRole>): WordImportResult {
   const { word: wordCol, reading: readingCol, translation: translationCol, furigana: furiganaCol } = mapping;
   if (wordCol == null || readingCol == null) throw new Error('The word and reading columns are required');
 
@@ -54,6 +56,7 @@ export function importWords(exp: AnkiExport, mapping: ColumnMapping<WordRole>): 
   exp.rows.forEach((row, i) => {
     const rawWord = row[wordCol] ?? '';
     const words = expandVariants(stripBracketFurigana(htmlToText(rawWord)));
+    const readingText = removeJapaneseSpaces(htmlToText(row[readingCol] ?? ''));
     const readings = expandVariants(htmlToText(row[readingCol] ?? ''));
     const translation = translationCol != null ? htmlToText(row[translationCol] ?? '') : '';
     const furiganaSource = furiganaCol != null && row[furiganaCol] ? row[furiganaCol] : rawWord;
@@ -75,7 +78,16 @@ export function importWords(exp: AnkiExport, mapping: ColumnMapping<WordRole>): 
     const isPairedList = words.length > 1 && words.length === readings.length && new Set(readings).size > 1;
     const drafts = isPairedList
       ? words.map((word, k) => ({ word, alternatives: [] as string[], reading: readings[k], suffix: `#${k + 1}` }))
-      : [{ word: words[0], alternatives: words.slice(1), reading: readings[0], suffix: '' }];
+      : [
+          {
+            word: words[0],
+            alternatives: words.slice(1),
+            reading: chooseReading(words[0], readings, furiganaOptions),
+            suffix: '',
+          },
+        ];
+    // Keep notes like "(に)きく" or "あに(き)" to show in the question; the reading itself stays clean.
+    const readingLabel = !isPairedList && readings.length > 1 && /[(（]/.test(readingText) ? readingText : undefined;
 
     for (const draft of drafts) {
       const note: WordNote = {
@@ -84,6 +96,7 @@ export function importWords(exp: AnkiExport, mapping: ColumnMapping<WordRole>): 
         word: draft.word,
         alternatives: draft.alternatives,
         reading: draft.reading,
+        ...(readingLabel && { readingLabel }),
         translation,
       };
 
@@ -128,6 +141,34 @@ function applyFurigana(note: WordNote, options: FuriganaSegment[][], furiganaWin
   const accepted = [previousWord, ...note.alternatives, ...fitting.map(furiganaBase)];
   note.alternatives = [...new Set(accepted)].filter((w) => w !== note.word && hasKanji(w));
   return !!chosen;
+}
+
+/**
+ * Picks the reading that belongs to the word when the field lists optional parts, e.g.
+ * "(に)きく" for 聞く (the particle used with it) or "あに (き)" for 兄: the version matching the
+ * furigana, otherwise the shortest one whose kana fit the word (聞く → きく, not にきく).
+ */
+function chooseReading(word: string, readings: string[], furigana: FuriganaSegment[][]): string {
+  if (readings.length <= 1) return readings[0];
+  const annotated = furigana.filter((o) => o.some((s) => s.reading));
+  const byFurigana =
+    readings.find((r) => annotated.some((o) => furiganaBase(o) === word && readingFits(o, r))) ??
+    readings.find((r) => annotated.some((o) => readingFits(o, r)));
+  if (byFurigana) return byFurigana;
+
+  const pattern = wordPattern(word);
+  const fitting = readings.filter((r) => pattern.test(toHiragana(r)));
+  return fitting.sort((a, b) => [...a].length - [...b].length)[0] ?? readings[0];
+}
+
+/** 聞く → /^.+く$/: the word's kana must appear in the reading; anything else stands for some kana. */
+function wordPattern(word: string): RegExp {
+  let source = '';
+  for (const ch of word) {
+    if (isKana(ch) || ch === '〜') source += toHiragana(ch).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    else if (!source.endsWith('.+')) source += '.+';
+  }
+  return new RegExp(`^${source}$`);
 }
 
 /** Compares readings ignoring script; digits and Latin letters in furigana ("1かい") match any kana. */

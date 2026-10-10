@@ -1,4 +1,5 @@
-// Parses Anki "Notes in Plain Text" exports (.txt).
+// Parses word lists from text files: Anki "Notes in Plain Text" exports, and any other delimited
+// text such as CSV/TSV files saved from a spreadsheet or exported from other flashcard apps.
 //
 // Recent Anki versions start the file with header lines such as:
 //   #separator:tab
@@ -10,8 +11,13 @@
 //   #columns:Front	Back        (only when the user picked "include column names")
 // followed by delimited rows. Fields containing the separator, quotes or line breaks are quoted
 // with double quotes, and quotes inside are doubled.
+//
+// Files without these headers get their separator guessed, and a first row of column names
+// ("word,reading,meaning") is recognized as a header.
 
-export interface AnkiExportMeta {
+import { isJapanese } from '../text/japanese';
+
+export interface WordFileMeta {
   separator: string;
   html: boolean;
   columnNames?: string[];
@@ -25,8 +31,8 @@ export interface AnkiExportMeta {
   deck?: string;
 }
 
-export interface AnkiExport {
-  meta: AnkiExportMeta;
+export interface WordFile {
+  meta: WordFileMeta;
   rows: string[][];
   columnCount: number;
 }
@@ -40,13 +46,22 @@ const SEPARATOR_NAMES: Record<string, string> = {
   colon: ':',
 };
 
-export function parseAnkiExport(text: string): AnkiExport {
+export class EncodingError extends Error {}
+
+export function parseWordFile(text: string): WordFile {
+  // Undecodable bytes become U+FFFD when a non-UTF-8 file (e.g. Shift_JIS) is read as UTF-8.
+  if (text.includes('\uFFFD')) {
+    throw new EncodingError('The file is not saved as UTF-8. Save it as UTF-8 (in Excel: "CSV UTF-8") and try again.');
+  }
   const source = text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
   const { meta, bodyStart } = parseHeader(source);
   const body = source.slice(bodyStart);
   const separator = meta.separator ?? sniffSeparator(body);
 
   const rows = parseDelimited(body, separator).filter((row) => row.some((cell) => cell.trim() !== ''));
+  if (!meta.columnNames && bodyStart === 0 && isHeaderRow(rows)) {
+    meta.columnNames = rows.shift()!.map((name) => name.trim());
+  }
   const columnCount = Math.max(0, ...rows.map((row) => row.length));
   for (const row of rows) while (row.length < columnCount) row.push('');
 
@@ -57,7 +72,7 @@ export function parseAnkiExport(text: string): AnkiExport {
   return { meta: { ...meta, separator, html: meta.html ?? true }, rows, columnCount };
 }
 
-type PartialMeta = Omit<AnkiExportMeta, 'separator' | 'html'> & { separator?: string; html?: boolean };
+type PartialMeta = Omit<WordFileMeta, 'separator' | 'html'> & { separator?: string; html?: boolean };
 
 function parseHeader(source: string): { meta: PartialMeta; bodyStart: number } {
   const meta: PartialMeta = {};
@@ -107,10 +122,44 @@ function parseHeader(source: string): { meta: PartialMeta; bodyStart: number } {
 }
 
 /** Older exports have no header: guess from the first lines. */
+/**
+ * Files without a header: picks the separator that splits the first lines into the same number of
+ * columns most consistently. A comma file whose translations contain ";" still comes out as commas.
+ */
 function sniffSeparator(body: string): string {
-  const sample = body.split('\n').slice(0, 20).join('\n');
-  for (const candidate of ['\t', ';', ',']) if (sample.includes(candidate)) return candidate;
-  return '\t';
+  const lines = body.split('\n').filter((l) => l.trim() !== '').slice(0, 30);
+  let best = { separator: '\t', score: 0 };
+  for (const separator of ['\t', ',', ';', '|']) {
+    const counts = lines.map((line) => line.replace(/"[^"]*"/g, '').split(separator).length);
+    const frequency = new Map<number, number>();
+    for (const c of counts) frequency.set(c, (frequency.get(c) ?? 0) + 1);
+    const [columns, lineCount] = [...frequency].sort((a, b) => b[1] - a[1])[0] ?? [1, 0];
+    // Consistency matters most; more columns break ties (",": 3 columns beats ";": 2).
+    const score = columns > 1 ? lineCount / lines.length + columns / 1000 : 0;
+    if (score > best.score) best = { separator, score };
+  }
+  return best.separator;
+}
+
+const HEADER_NAMES =
+  /^(word|words|kanji|vocab|vocabulary|expression|term|front|back|reading|readings|kana|hiragana|furigana|meaning|meanings|translation|definition|english|russian|notes?|example|слово|чтение|перевод|значение|иероглиф|単語|漢字|読み|よみ|かな|ふりがな|意味|訳)$/i;
+
+/**
+ * A first row of column names: either it uses known names, or it has no Japanese at all while a
+ * column below it is (nearly) all Japanese, like "word" above 父, 母, 兄….
+ */
+function isHeaderRow(rows: string[][]): boolean {
+  if (rows.length < 2) return false;
+  const [first, ...rest] = rows;
+  const named = first.filter((cell) => HEADER_NAMES.test(cell.trim())).length;
+  if (named >= 2 || (named === 1 && first.length === 1)) return true;
+
+  const hasJapanese = (cell: string) => [...cell].some(isJapanese);
+  if (first.some(hasJapanese)) return false;
+  const sample = rest.slice(0, 50);
+  return first.some(
+    (cell, i) => cell.trim() !== '' && sample.filter((row) => hasJapanese(row[i] ?? '')).length >= sample.length * 0.8,
+  );
 }
 
 function parseDelimited(body: string, separator: string): string[][] {

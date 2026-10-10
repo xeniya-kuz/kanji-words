@@ -9,12 +9,12 @@ import { hasKanji } from '../../text/japanese';
 import { detectDeckKind, detectKanjiColumns, detectWordColumns, profileColumns } from '../detect-columns';
 import { importKanji } from '../import-kanji';
 import { importWords } from '../import-words';
-import { parseAnkiExport } from '../parse-export';
+import { parseWordFile } from '../word-file';
 
 const dir = path.join(__dirname, '../../../../test-data/private');
 const load = (name: string) => {
   const file = path.join(dir, name);
-  return fs.existsSync(file) ? parseAnkiExport(fs.readFileSync(file, 'utf8')) : null;
+  return fs.existsSync(file) ? parseWordFile(fs.readFileSync(file, 'utf8')) : null;
 };
 
 const words = load('words.txt');
@@ -51,6 +51,7 @@ const rtk = load('rtk.txt');
     expect(find('〜着')?.reading).toBe('〜ちゃく');
     expect(find('月曜日')?.reading).toBe('げつようび');
     expect(find('月に1回')?.furigana).toBeDefined();
+    expect(find('兄')).toMatchObject({ reading: 'あに', readingLabel: 'あに(き)', furigana: [{ text: '兄', reading: 'あに' }] });
     expect(find('吊るす')?.alternatives).toContain('吊す');
     expect(find('旨く')).toMatchObject({ alternatives: ['上手く', '巧く'], furigana: expect.any(Array) });
   });

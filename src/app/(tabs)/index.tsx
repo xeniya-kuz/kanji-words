@@ -43,7 +43,7 @@ export default function PracticeScreen() {
 
         {data && total === 0 && (
           <Card>
-            <ThemedText>Import an Anki deck to start practicing.</ThemedText>
+            <ThemedText>Import a word list to start practicing.</ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
               You will see a word’s reading or translation and choose how it is written with kanji.
             </ThemedText>
@@ -83,7 +83,7 @@ export default function PracticeScreen() {
 
             {data.kanjiCount === 0 && (
               <ThemedText type="small" themeColor="textSecondary">
-                Optional: import a kanji deck (e.g. Remembering the Kanji) to see keywords.
+                Optional: import a kanji list (e.g. Remembering the Kanji) to see keywords.
               </ThemedText>
             )}
 
@@ -96,7 +96,7 @@ export default function PracticeScreen() {
         )}
 
         <Button
-          title={total > 0 ? 'Import another deck' : 'Import Anki deck'}
+          title={total > 0 ? 'Import more words' : 'Import words'}
           variant={total > 0 ? 'secondary' : 'primary'}
           onPress={() => router.push('/import')}
         />

@@ -2,8 +2,8 @@
 
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import type { DeckKind } from '@/core/anki/detect-columns';
-import type { AnyMapping, ImportPlan, SavedMappings } from '@/core/anki/import-plan';
+import type { DeckKind } from '@/core/import/detect-columns';
+import type { AnyMapping, ImportPlan, SavedMappings } from '@/core/import/import-plan';
 
 export async function loadSavedMappings(db: SQLiteDatabase): Promise<SavedMappings> {
   const rows = await db.getAllAsync<{ kind: DeckKind; note_type: string; mapping: string }>(

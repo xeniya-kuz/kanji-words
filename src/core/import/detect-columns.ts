@@ -10,7 +10,7 @@ import {
   isKanji,
   isKatakanaOnly,
 } from '../text/japanese';
-import type { AnkiExport } from './parse-export';
+import type { WordFile } from './word-file';
 
 export type DeckKind = 'words' | 'kanji';
 export type WordRole = 'word' | 'reading' | 'translation' | 'furigana';
@@ -48,7 +48,7 @@ export interface ColumnProfile {
 
 const SAMPLE_ROWS = 400;
 
-export function profileColumns(exp: AnkiExport): ColumnProfile[] {
+export function profileColumns(exp: WordFile): ColumnProfile[] {
   const rows = pickSample(exp.rows, SAMPLE_ROWS);
   const { meta } = exp;
   const reserved = new Map<number, ColumnProfile['reserved']>();

@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import type { WordNote } from '@/core/anki/import-words';
+import type { WordNote } from '@/core/import/import-words';
 
 interface NoteRow {
   id: string;
@@ -8,6 +8,7 @@ interface NoteRow {
   word: string;
   alternatives: string;
   reading: string;
+  reading_label: string | null;
   translation: string;
   furigana: string | null;
 }
@@ -18,6 +19,7 @@ const fromRow = (row: NoteRow): WordNote => ({
   word: row.word,
   alternatives: JSON.parse(row.alternatives),
   reading: row.reading,
+  readingLabel: row.reading_label ?? undefined,
   translation: row.translation,
   furigana: row.furigana ? JSON.parse(row.furigana) : undefined,
 });
@@ -28,12 +30,12 @@ export async function saveNotes(db: SQLiteDatabase, notes: WordNote[]): Promise<
   const now = Date.now();
   await db.withExclusiveTransactionAsync(async (txn) => {
     const statement = await txn.prepareAsync(`
-      INSERT INTO note (id, deck, word, alternatives, reading, translation, furigana, imported_at)
-      VALUES ($id, $deck, $word, $alternatives, $reading, $translation, $furigana, $now)
+      INSERT INTO note (id, deck, word, alternatives, reading, reading_label, translation, furigana, imported_at)
+      VALUES ($id, $deck, $word, $alternatives, $reading, $readingLabel, $translation, $furigana, $now)
       ON CONFLICT (id) DO UPDATE SET
         deck = excluded.deck, word = excluded.word, alternatives = excluded.alternatives,
-        reading = excluded.reading, translation = excluded.translation, furigana = excluded.furigana,
-        imported_at = excluded.imported_at
+        reading = excluded.reading, reading_label = excluded.reading_label, translation = excluded.translation,
+        furigana = excluded.furigana, imported_at = excluded.imported_at
     `);
     try {
       for (const note of notes) {
@@ -43,6 +45,7 @@ export async function saveNotes(db: SQLiteDatabase, notes: WordNote[]): Promise<
           $word: note.word,
           $alternatives: JSON.stringify(note.alternatives),
           $reading: note.reading,
+          $readingLabel: note.readingLabel ?? null,
           $translation: note.translation,
           $furigana: note.furigana ? JSON.stringify(note.furigana) : null,
           $now: now,

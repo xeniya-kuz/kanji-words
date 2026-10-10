@@ -1,5 +1,5 @@
 import { canImport, createImportPlan, missingRoles, previewGroup, runImport, splitByNoteType } from '../import-plan';
-import { parseAnkiExport } from '../parse-export';
+import { parseWordFile } from '../word-file';
 
 const tsv = (...lines: string[][]) => lines.map((cells) => cells.join('\t')).join('\n');
 const HEADER = '#separator:tab\n#guid column:1\n#notetype column:2\n';
@@ -22,7 +22,7 @@ const reversedRows = Array.from({ length: 25 }, (_, i) => [
 
 describe('splitByNoteType', () => {
   it('groups rows by note type, largest first', () => {
-    const exp = parseAnkiExport(HEADER + tsv(...vocabRows.slice(0, 3), ...reversedRows));
+    const exp = parseWordFile(HEADER + tsv(...vocabRows.slice(0, 3), ...reversedRows));
     expect(splitByNoteType(exp).map((g) => [g.noteType, g.exp.rows.length])).toEqual([
       ['Reversed', 25],
       ['Vocab', 3],
@@ -30,14 +30,14 @@ describe('splitByNoteType', () => {
   });
 
   it('keeps a single group without a note type column', () => {
-    const exp = parseAnkiExport('#separator:tab\n' + tsv(['父', 'ちち', 'father']));
+    const exp = parseWordFile('#separator:tab\n' + tsv(['父', 'ちち', 'father']));
     expect(splitByNoteType(exp)).toEqual([{ noteType: '', exp }]);
   });
 });
 
 describe('createImportPlan', () => {
   it('detects columns per note type when the layouts differ', () => {
-    const exp = parseAnkiExport(HEADER + tsv(...vocabRows, ...reversedRows));
+    const exp = parseWordFile(HEADER + tsv(...vocabRows, ...reversedRows));
     const plan = createImportPlan(exp, () => undefined);
     expect(plan.kind).toBe('words');
     const byType = Object.fromEntries(plan.groups.map((g) => [g.noteType, g.mapping]));
@@ -47,13 +47,13 @@ describe('createImportPlan', () => {
   });
 
   it('uses the whole-file mapping for small groups', () => {
-    const exp = parseAnkiExport(HEADER + tsv(...vocabRows, ['x1', 'Basic', '海', 'うみ', 'sea']));
+    const exp = parseWordFile(HEADER + tsv(...vocabRows, ['x1', 'Basic', '海', 'うみ', 'sea']));
     const plan = createImportPlan(exp, () => undefined);
     expect(plan.groups.find((g) => g.noteType === 'Basic')?.mapping).toEqual({ word: 2, reading: 3, translation: 4 });
   });
 
   it('prefers a saved mapping', () => {
-    const exp = parseAnkiExport(HEADER + tsv(...vocabRows));
+    const exp = parseWordFile(HEADER + tsv(...vocabRows));
     const plan = createImportPlan(exp, (kind, noteType) =>
       kind === 'words' && noteType === 'Vocab' ? { word: 2, reading: 3 } : undefined,
     );
@@ -65,7 +65,7 @@ describe('createImportPlan', () => {
 
 describe('runImport', () => {
   it('merges groups and removes duplicates across them', () => {
-    const exp = parseAnkiExport(
+    const exp = parseWordFile(
       HEADER + tsv(['a', 'One', '父', 'ちち', 'father'], ['b', 'Two', '父', 'ちち', 'dad'], ['c', 'Two', 'ペラペラ', 'ペラペラ', 'fluent']),
     );
     const plan = createImportPlan(exp, () => ({ word: 2, reading: 3, translation: 4 }));
@@ -77,7 +77,7 @@ describe('runImport', () => {
   });
 
   it('skips excluded groups', () => {
-    const exp = parseAnkiExport(HEADER + tsv(...vocabRows, ...reversedRows));
+    const exp = parseWordFile(HEADER + tsv(...vocabRows, ...reversedRows));
     const plan = createImportPlan(exp, () => undefined);
     plan.groups.find((g) => g.noteType === 'Reversed')!.include = false;
     const outcome = runImport(plan);
@@ -85,7 +85,7 @@ describe('runImport', () => {
   });
 
   it('previews the first notes of a group', () => {
-    const exp = parseAnkiExport(HEADER + tsv(...vocabRows));
+    const exp = parseWordFile(HEADER + tsv(...vocabRows));
     const plan = createImportPlan(exp, () => undefined);
     const preview = previewGroup('words', plan.groups[0]);
     expect(preview.kind === 'words' && preview.notes.map((n) => n.word)).toEqual(['父親', '母親', '兄親']);

@@ -30,7 +30,7 @@ export default function RootLayout() {
         <SQLiteProvider databaseName={APP_DB_NAME} onInit={migrateAppDb}>
           <Stack>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="import" options={{ title: 'Import deck' }} />
+            <Stack.Screen name="import" options={{ title: 'Import' }} />
             <Stack.Screen name="quiz" options={{ title: 'Practice' }} />
           </Stack>
         </SQLiteProvider>

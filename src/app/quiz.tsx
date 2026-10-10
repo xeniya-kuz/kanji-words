@@ -11,7 +11,7 @@ import { KanjiBreakdown, type KanjiNote } from '@/components/quiz/kanji-breakdow
 import { OptionButton, type OptionState } from '@/components/quiz/option-button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import type { WordNote } from '@/core/anki/import-words';
+import type { WordNote } from '@/core/import/import-words';
 import type { KanjiData } from '@/core/quiz/kanji-data';
 import { buildQuestion, type Question } from '@/core/quiz/question';
 import { knownKanjiSet } from '@/core/quiz/known-kanji';
@@ -175,7 +175,7 @@ export default function QuizScreen() {
         <ThemedText style={styles.center}>
           {session.totalWords > 0
             ? 'All decks are turned off. Choose decks to practice in Settings.'
-            : 'No words yet. Import an Anki deck first.'}
+            : 'No words yet. Import a word list first.'}
         </ThemedText>
         <Button title="Back" variant="secondary" onPress={() => router.back()} />
       </Centered>
@@ -257,7 +257,9 @@ export default function QuizScreen() {
                 Once more
               </ThemedText>
             )}
-            {showReading && <Text style={[styles.reading, { color: theme.text }]}>{note.reading}</Text>}
+            {showReading && (
+              <Text style={[styles.reading, { color: theme.text }]}>{note.readingLabel ?? note.reading}</Text>
+            )}
             {showTranslation && (
               <ThemedText style={styles.center} themeColor={showReading ? 'textSecondary' : 'text'}>
                 {note.translation}

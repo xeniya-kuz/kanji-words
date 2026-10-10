@@ -4,7 +4,7 @@
 import { htmlToText } from '../text/html';
 import { isKanji } from '../text/japanese';
 import type { ColumnMapping, KanjiRole } from './detect-columns';
-import type { AnkiExport } from './parse-export';
+import type { WordFile } from './word-file';
 
 export interface KanjiEntry {
   kanji: string;
@@ -21,7 +21,7 @@ export interface KanjiImportResult {
   skipped: number;
 }
 
-export function importKanji(exp: AnkiExport, mapping: ColumnMapping<KanjiRole>): KanjiImportResult {
+export function importKanji(exp: WordFile, mapping: ColumnMapping<KanjiRole>): KanjiImportResult {
   const { kanji: kanjiCol, keyword: keywordCol, frame: frameCol, onyomi: onCol, kunyomi: kunCol } = mapping;
   if (kanjiCol == null) throw new Error('The kanji column is required');
 

@@ -4,8 +4,8 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Card } from '@/components/card';
 import { ColumnPicker, columnLabel } from '@/components/import/column-picker';
 import { ThemedText } from '@/components/themed-text';
-import { REQUIRED_ROLES, type DeckKind } from '@/core/anki/detect-columns';
-import type { AnyMapping, PlanGroup } from '@/core/anki/import-plan';
+import { REQUIRED_ROLES, type DeckKind } from '@/core/import/detect-columns';
+import type { AnyMapping, PlanGroup } from '@/core/import/import-plan';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 

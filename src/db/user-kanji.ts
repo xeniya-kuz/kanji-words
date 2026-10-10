@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import type { KanjiEntry } from '@/core/anki/import-kanji';
+import type { KanjiEntry } from '@/core/import/import-kanji';
 
 /** Replaces the user's kanji deck (keywords, frames) with a newly imported one. */
 export async function replaceUserKanji(db: SQLiteDatabase, entries: KanjiEntry[]) {

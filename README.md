@@ -1,6 +1,6 @@
 # Kanji Words
 
-An Android app for learning to recognize Japanese words by their kanji, using your own Anki decks.
+An Android app for learning to recognize Japanese words by their kanji, using your own word lists.
 
 You see a word's reading and/or translation and pick its correct spelling among four options. The
 wrong options look or sound like the right one, so you can't answer by the reading alone. You
@@ -8,8 +8,9 @@ have to recognize the kanji.
 
 ## Features
 
-- **Imports your Anki decks**: any word deck exported as plain text. The app detects which column
-  is the word, reading, translation and furigana (ruby or `漢字[かんじ]`), and you confirm it.
+- **Imports your own word lists**: Anki exports, CSV/TSV files from Google Sheets or Excel, or any
+  other text file with one word per line. The app detects which column is the word, reading,
+  translation and furigana (ruby or `漢字[かんじ]`), and you confirm it.
 - **Believable wrong answers** built from look-alike kanji, kanji with the same reading, real
   homophones (期間 / 機関) and words from your decks, balanced so the answer can't be guessed from
   which kanji repeats most.
@@ -30,24 +31,30 @@ have to recognize the kanji.
 
 Works on Android 7 and newer.
 
-## Import your decks
+## Import your words
 
-On a computer, in Anki:
+Any text file works: one word per line, columns separated by tabs, commas or semicolons
+(`.txt`, `.csv`, `.tsv`), saved as UTF-8. A first row with column names (`word,reading,meaning`)
+is recognized automatically.
 
-1. **File → Export**, choose your deck.
-2. Format: **Notes in Plain Text (.txt)**.
-3. Check **Include HTML and media references**, **Include unique identifier**, **Include deck name**
-   and **Include notetype name**.
-4. Copy the `.txt` file to your phone (USB, Google Drive, a messenger…).
-
-In the app: **Practice → Import Anki deck → Choose file**, check the columns and the preview, and
-tap **Import**.
-
-- A **word deck** needs a word written with kanji, its reading in kana and a translation. Words
-  written only in kana are skipped.
-- A **kanji deck** needs one kanji per note; a keyword, an order number (like an RTK frame) and
+- A **word list** needs the word written with kanji (聞く), its reading in kana (きく) and a
+  translation. Furigana is optional. Words written only in kana are skipped.
+- Optional parts of a reading in parentheses, like `(に)きく` or `あに (き)`, are shown in the
+  question as written, while the furigana uses the reading that fits the word.
+- A **kanji list** needs one kanji per line; a keyword, an order number (like an RTK frame) and
   readings are optional.
-- Importing the same deck again updates its words and keeps your progress.
+
+Where to get the file:
+
+- **Anki**: File → Export → **Notes in Plain Text (.txt)**, with **Include HTML and media
+  references**, **Include unique identifier**, **Include deck name** and **Include notetype name**
+  checked. Re-importing the same deck later updates its words and keeps your progress.
+- **Google Sheets**: File → Download → **Tab-separated values (.tsv)**.
+- **Excel**: Save As → **CSV UTF-8**.
+- **Other flashcard apps**: their export to text or CSV.
+
+Copy the file to your phone (USB, Google Drive, a messenger…), then in the app:
+**Practice → Import words → Choose file**, check the columns and the preview, and tap **Import**.
 
 ## Development
 
@@ -63,7 +70,7 @@ npm run build:kanji-db  # rebuild assets/db/kanji.db from dictionary sources
 npm run build:icons     # regenerate the app icon and splash image
 ```
 
-Real Anki exports can be put in `test-data/private/` (`words.txt`, `rtk.txt`) to run the tests on
+Real word lists can be put in `test-data/private/` (`words.txt`, `rtk.txt`) to run the tests on
 them. That folder is git-ignored so personal decks are never committed.
 
 ### Building the APK
@@ -87,7 +94,7 @@ signing key is stored there, and Android only installs updates signed with the s
 src/app/            screens (Expo Router: every file is a route)
 src/components/     shared UI components (furigana, buttons, quiz pieces…)
 src/core/           plain TypeScript logic, no React: tested with Jest
-  anki/             Anki export parsing, column detection, word and kanji importers
+  import/           word file parsing, column detection, word and kanji importers
   quiz/             wrong-answer generator, spaced repetition, session helpers
   text/             HTML cleanup, furigana parsing, Japanese text helpers
 src/db/             SQLite: the app's own database and the bundled kanji database

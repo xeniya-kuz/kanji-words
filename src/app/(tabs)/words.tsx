@@ -50,7 +50,7 @@ export default function WordsScreen() {
         ListEmptyComponent={
           data ? (
             <ThemedText themeColor="textSecondary">
-              {search ? 'Nothing found.' : 'No words yet. Import an Anki deck on the Practice tab.'}
+              {search ? 'Nothing found.' : 'No words yet. Import a word list on the Practice tab.'}
             </ThemedText>
           ) : null
         }

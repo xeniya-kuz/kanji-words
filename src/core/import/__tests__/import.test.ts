@@ -1,13 +1,13 @@
 import { detectDeckKind, detectKanjiColumns, detectWordColumns, profileColumns } from '../detect-columns';
 import { importKanji } from '../import-kanji';
 import { importWords } from '../import-words';
-import { parseAnkiExport } from '../parse-export';
+import { EncodingError, parseWordFile } from '../word-file';
 
 const tsv = (...lines: string[][]) => lines.map((cells) => cells.join('\t')).join('\n');
 
-describe('parseAnkiExport', () => {
+describe('parseWordFile', () => {
   it('reads Anki header lines', () => {
-    const exp = parseAnkiExport(
+    const exp = parseWordFile(
       '#separator:tab\n#html:true\n#guid column:1\n#notetype column:2\n#deck column:3\n#tags column:5\n' +
         tsv(['g1', 'Basic', 'Deck::Sub', '父', 'family']),
     );
@@ -23,7 +23,7 @@ describe('parseAnkiExport', () => {
   });
 
   it('handles quoted fields with separators, quotes and line breaks', () => {
-    const exp = parseAnkiExport('#separator:tab\n"a\tb"\t"say ""hi"""\t"line1\nline2"\r\nnext\t\t\n');
+    const exp = parseWordFile('#separator:tab\n"a\tb"\t"say ""hi"""\t"line1\nline2"\r\nnext\t\t\n');
     expect(exp.rows).toEqual([
       ['a\tb', 'say "hi"', 'line1\nline2'],
       ['next', '', ''],
@@ -31,7 +31,7 @@ describe('parseAnkiExport', () => {
   });
 
   it('strips a BOM and guesses the separator when there is no header', () => {
-    const exp = parseAnkiExport('\uFEFF父;ちち;father\n母;はは;mother');
+    const exp = parseWordFile('\uFEFF父;ちち;father\n母;はは;mother');
     expect(exp.meta.separator).toBe(';');
     expect(exp.rows).toEqual([
       ['父', 'ちち', 'father'],
@@ -39,8 +39,36 @@ describe('parseAnkiExport', () => {
     ]);
   });
 
+  it('guesses the separator from consistent column counts', () => {
+    // Translations contain ";" but the columns are separated by commas.
+    const exp = parseWordFile('父,ちち,father; dad\n母,はは,mother; mom\n兄,あに,older brother');
+    expect(exp.meta.separator).toBe(',');
+    expect(exp.rows[0]).toEqual(['父', 'ちち', 'father; dad']);
+  });
+
+  it('recognizes a header row in plain CSV files', () => {
+    expect(parseWordFile('word,reading,meaning\n父,ちち,father\n母,はは,mother').meta.columnNames).toEqual([
+      'word',
+      'reading',
+      'meaning',
+    ]);
+    expect(parseWordFile('単語\t読み\t意味\n父\tちち\tотец').meta.columnNames).toEqual(['単語', '読み', '意味']);
+    // Unknown names, but no Japanese above a Japanese column.
+    const custom = parseWordFile('Expression;Yomi;Russian\n父;ちち;отец\n母;はは;мать');
+    expect(custom.meta.columnNames).toEqual(['Expression', 'Yomi', 'Russian']);
+    expect(custom.rows).toHaveLength(2);
+    // The first row is data.
+    const plain = parseWordFile('父,ちち,father\n母,はは,mother');
+    expect(plain.meta.columnNames).toBeUndefined();
+    expect(plain.rows).toHaveLength(2);
+  });
+
+  it('rejects files that are not UTF-8', () => {
+    expect(() => parseWordFile('\uFFFD\uFFFD,ちち')).toThrow(EncodingError);
+  });
+
   it('reads column names', () => {
-    const exp = parseAnkiExport('#separator:tab\n#columns:Kanji\tReading\tRussian word\n父\tちち\tотец');
+    const exp = parseWordFile('#separator:tab\n#columns:Kanji\tReading\tRussian word\n父\tちち\tотец');
     expect(exp.meta.columnNames).toEqual(['Kanji', 'Reading', 'Russian word']);
   });
 });
@@ -57,14 +85,14 @@ const WORDS = [
 describe('column detection', () => {
   it('finds word deck columns in any order', () => {
     const shuffled = WORDS.map(([w, r, t, f]) => ['guid', t, f, r, w]);
-    const exp = parseAnkiExport('#separator:tab\n#guid column:1\n' + tsv(...shuffled));
+    const exp = parseWordFile('#separator:tab\n#guid column:1\n' + tsv(...shuffled));
     const profiles = profileColumns(exp);
     expect(detectDeckKind(profiles)).toBe('words');
     expect(detectWordColumns(profiles)).toEqual({ translation: 1, furigana: 2, reading: 3, word: 4 });
   });
 
   it('uses column names as a hint without being fooled by "Russian word"', () => {
-    const exp = parseAnkiExport(
+    const exp = parseWordFile(
       '#separator:tab\n#columns:Russian word\tKana\tWord\n' + tsv(...WORDS.map(([w, r, t]) => [t, r, w])),
     );
     expect(detectWordColumns(profileColumns(exp))).toEqual({ translation: 0, reading: 1, word: 2 });
@@ -78,7 +106,7 @@ describe('column detection', () => {
       ['4', '四', 'four', 'シ', 'よ、よ.つ、よっ.つ'],
       ['5', '五', 'five', 'ゴ', 'いつ、いつ.つ'],
     ];
-    const profiles = profileColumns(parseAnkiExport('#separator:tab\n' + tsv(...rows)));
+    const profiles = profileColumns(parseWordFile('#separator:tab\n' + tsv(...rows)));
     expect(detectDeckKind(profiles)).toBe('kanji');
     expect(detectKanjiColumns(profiles)).toEqual({ frame: 0, kanji: 1, keyword: 2, onyomi: 3, kunyomi: 4 });
   });
@@ -88,7 +116,7 @@ describe('importWords', () => {
   const mapping = { word: 0, reading: 1, translation: 2, furigana: 3 };
 
   it('imports notes with furigana and skips kana-only words', () => {
-    const result = importWords(parseAnkiExport('#separator:tab\n' + tsv(...WORDS)), mapping);
+    const result = importWords(parseWordFile('#separator:tab\n' + tsv(...WORDS)), mapping);
     expect(result.notes.map((n) => n.word)).toEqual(['父', '祖父', '家族', '今年', '電池が切れる']);
     expect(result.skipped).toEqual([{ row: 4, reason: 'no-kanji', text: 'ガンガン' }]);
     expect(result.notes[1]).toMatchObject({
@@ -103,7 +131,7 @@ describe('importWords', () => {
   });
 
   it('keeps alternative spellings and splits paired lists', () => {
-    const exp = parseAnkiExport(
+    const exp = parseWordFile(
       '#separator:tab\n' +
         tsv(
           ['(伯/叔)母さん', 'おばさん', 'тётя', ''],
@@ -121,7 +149,7 @@ describe('importWords', () => {
   });
 
   it('prefers furigana spelling when it matches the reading', () => {
-    const exp = parseAnkiExport(
+    const exp = parseWordFile(
       '#separator:tab\n' +
         tsv(
           ['そのとおりです', 'そのとおりです', 'именно так', 'その<ruby>通<rt>とお</rt></ruby>りです'],
@@ -133,7 +161,7 @@ describe('importWords', () => {
   });
 
   it('keeps the word field when it has kanji, adding the furigana spelling as an alternative', () => {
-    const exp = parseAnkiExport(
+    const exp = parseWordFile(
       '#separator:tab\n' + tsv(['吊るす', 'つるす', 'вешать', '<ruby>吊<rt>つる</rt></ruby>す']),
     );
     const { notes } = importWords(exp, mapping);
@@ -142,7 +170,7 @@ describe('importWords', () => {
   });
 
   it('matches digits in furigana against any kana', () => {
-    const exp = parseAnkiExport(
+    const exp = parseWordFile(
       '#separator:tab\n' +
         tsv(['月に1回', 'つきにいっかい', 'раз в месяц', '<ruby>月<rt>つき</rt></ruby>に1<ruby>回<rt>かい</rt></ruby>']),
     );
@@ -150,7 +178,7 @@ describe('importWords', () => {
   });
 
   it('picks the furigana line that matches the word', () => {
-    const exp = parseAnkiExport(
+    const exp = parseWordFile(
       '#separator:tab\n' +
         tsv([
           '旨く<br>上手く',
@@ -168,12 +196,31 @@ describe('importWords', () => {
   });
 
   it('reports kana-only notes with an empty word field as having no kanji', () => {
-    const exp = parseAnkiExport('#separator:tab\n' + tsv(['', 'ペラペラ', 'бегло', '']));
+    const exp = parseWordFile('#separator:tab\n' + tsv(['', 'ペラペラ', 'бегло', '']));
     expect(importWords(exp, mapping).skipped).toEqual([{ row: 1, reason: 'no-kanji', text: 'ペラペラ' }]);
   });
 
+  it('picks the reading that fits the word when the reading has optional parts', () => {
+    const exp = parseWordFile(
+      '#separator:tab\n' +
+        tsv(
+          ['聞く', '(に)きく', 'спрашивать', ''],
+          ['兄', 'あに (き)', 'старший брат', '<ruby>兄<rp>(</rp><rt>あに</rt><rp>)</rp></ruby>'],
+          ['周りに', 'まわり(に)', 'вокруг', ''],
+        ),
+    );
+    const { notes, furiganaIgnored } = importWords(exp, mapping);
+    expect(notes.map(({ word, reading, readingLabel }) => ({ word, reading, readingLabel }))).toEqual([
+      { word: '聞く', reading: 'きく', readingLabel: '(に)きく' },
+      { word: '兄', reading: 'あに', readingLabel: 'あに(き)' },
+      { word: '周りに', reading: 'まわりに', readingLabel: 'まわり(に)' },
+    ]);
+    expect(notes[1].furigana).toEqual([{ text: '兄', reading: 'あに' }]);
+    expect(furiganaIgnored).toBe(0);
+  });
+
   it('drops furigana that does not match the reading', () => {
-    const exp = parseAnkiExport(
+    const exp = parseWordFile(
       '#separator:tab\n' + tsv(['毎月', 'まいげつ', 'каждый месяц', '<ruby>毎<rt>まい</rt></ruby><ruby>月<rt>つき</rt></ruby>']),
     );
     const result = importWords(exp, mapping);
@@ -182,13 +229,13 @@ describe('importWords', () => {
   });
 
   it('reads bracket furigana from the word field when there is no furigana column', () => {
-    const exp = parseAnkiExport('#separator:tab\n' + tsv(['祖父[そふ]', 'そふ', 'grandfather']));
+    const exp = parseWordFile('#separator:tab\n' + tsv(['祖父[そふ]', 'そふ', 'grandfather']));
     const { notes } = importWords(exp, { word: 0, reading: 1, translation: 2 });
     expect(notes[0]).toMatchObject({ word: '祖父', furigana: [{ text: '祖父', reading: 'そふ' }] });
   });
 
   it('skips duplicates and uses GUIDs as ids', () => {
-    const exp = parseAnkiExport(
+    const exp = parseWordFile(
       '#separator:tab\n#guid column:1\n' + tsv(['g1', '父', 'ちち', 'отец'], ['g2', '父', 'ちち', 'папа']),
     );
     const result = importWords(exp, { word: 1, reading: 2, translation: 3 });
@@ -199,7 +246,7 @@ describe('importWords', () => {
 
 describe('importKanji', () => {
   it('imports entries, splits variants and readings, merges duplicates', () => {
-    const exp = parseAnkiExport(
+    const exp = parseWordFile(
       '#separator:tab\n' +
         tsv(
           ['1', '一', 'one', 'イチ、イツ', 'ひと-、ひと.つ'],

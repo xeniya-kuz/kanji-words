@@ -15,14 +15,14 @@ import {
 } from './detect-columns';
 import { importKanji, type KanjiEntry } from './import-kanji';
 import { importWords, type SkipReason, type WordNote } from './import-words';
-import type { AnkiExport } from './parse-export';
+import type { WordFile } from './word-file';
 
 export type AnyMapping = ColumnMapping<WordRole> & ColumnMapping<KanjiRole>;
 
 export interface PlanGroup {
   /** Note type name, or "" when the export doesn't say. */
   noteType: string;
-  exp: AnkiExport;
+  exp: WordFile;
   profiles: ColumnProfile[];
   mapping: AnyMapping;
   include: boolean;
@@ -39,7 +39,7 @@ export type SavedMappings = (kind: DeckKind, noteType: string) => AnyMapping | u
 /** Groups smaller than this are too small to detect columns reliably on their own. */
 const MIN_ROWS_FOR_OWN_DETECTION = 20;
 
-export function createImportPlan(exp: AnkiExport, saved: SavedMappings, kind?: DeckKind): ImportPlan {
+export function createImportPlan(exp: WordFile, saved: SavedMappings, kind?: DeckKind): ImportPlan {
   const allProfiles = profileColumns(exp);
   const deckKind = kind ?? detectDeckKind(allProfiles);
   const detect = (profiles: ColumnProfile[]): AnyMapping =>
@@ -127,7 +127,7 @@ export function previewGroup(kind: DeckKind, group: PlanGroup, count = 3): Impor
 }
 
 /** Splits rows by the note type column; one group when the export has a single note type. */
-export function splitByNoteType(exp: AnkiExport): { noteType: string; exp: AnkiExport }[] {
+export function splitByNoteType(exp: WordFile): { noteType: string; exp: WordFile }[] {
   const column = exp.meta.notetypeColumn;
   if (column == null) return [{ noteType: exp.meta.notetype ?? '', exp }];
 

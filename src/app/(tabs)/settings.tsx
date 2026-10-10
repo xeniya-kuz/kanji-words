@@ -170,7 +170,7 @@ export default function SettingsScreen() {
         )}
 
         <Section title="Data">
-          <Button title="Import Anki deck" variant="secondary" onPress={() => router.push('/import')} />
+          <Button title="Import words" variant="secondary" onPress={() => router.push('/import')} />
           <Button
             title="Reset progress"
             variant="danger"
