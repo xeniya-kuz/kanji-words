@@ -1,4 +1,3 @@
-import { NotoSansJP_400Regular } from '@expo-google-fonts/noto-sans-jp/400Regular';
 import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -14,8 +13,8 @@ SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
-  // Only the Regular weight is bundled: each Noto Sans JP weight is ~5.6 MB.
-  const [fontsLoaded, fontError] = useFonts({ [JapaneseFont]: NotoSansJP_400Regular });
+  // Noto Sans JP Regular, reduced to the characters the app shows (see scripts/build-font.mts).
+  const [fontsLoaded, fontError] = useFonts({ [JapaneseFont]: require('@/assets/fonts/NotoSansJP-Subset.ttf') });
   const ready = fontsLoaded || fontError != null;
 
   useEffect(() => {

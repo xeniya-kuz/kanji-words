@@ -9,7 +9,10 @@
       "android": {
         "buildType": "apk"
       },
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "APK_BUILD": "1"
+      }
     },
     "production": {
       "autoIncrement": true

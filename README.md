@@ -67,6 +67,7 @@ npm test                # unit tests (Jest)
 npm run typecheck       # TypeScript
 npm run lint            # ESLint
 npm run build:kanji-db  # rebuild assets/db/kanji.db from dictionary sources
+npm run build:font      # rebuild the Japanese font subset (after build:kanji-db)
 npm run build:icons     # regenerate the app icon and splash image
 ```
 
@@ -82,6 +83,10 @@ Android Studio is needed. You need a free Expo account.
 npx eas-cli@latest login
 npx eas-cli@latest build --platform android --profile preview
 ```
+
+The APK only contains code for phone processors (arm64-v8a and armeabi-v7a, not emulators) and
+compresses it, to keep the download small; Google Play builds (`--profile production`) are
+split per device by Play itself.
 
 The first build links the project to your Expo account and creates the app's signing key (answer
 yes to both questions). When the build finishes, the terminal and the Expo website show a link to
@@ -99,8 +104,9 @@ src/core/           plain TypeScript logic, no React: tested with Jest
   text/             HTML cleanup, furigana parsing, Japanese text helpers
 src/db/             SQLite: the app's own database and the bundled kanji database
 src/state/          settings
-scripts/            build-kanji-db.mts, build-icons.mts (plain Node 24)
+scripts/            build-kanji-db.mts, build-font.mts, build-icons.mts (plain Node 24)
 assets/db/          kanji.db: bundled kanji, look-alikes, readings, JMdict words
+assets/fonts/       Noto Sans JP reduced to the characters the app shows
 ```
 
 ## Data and licenses
