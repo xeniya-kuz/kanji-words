@@ -84,9 +84,10 @@ npx eas-cli@latest login
 npx eas-cli@latest build --platform android --profile preview
 ```
 
-The APK only contains code for phone processors (arm64-v8a and armeabi-v7a, not emulators) and
-compresses it, to keep the download small; Google Play builds (`--profile production`) are
-split per device by Play itself.
+To keep the download small, the app only contains code for 64-bit ARM phones (arm64-v8a, which
+covers practically every phone from the last several years; not old 32-bit phones or emulators),
+and the APK compresses it. Google Play builds (`--profile production`) are split per device by
+Play itself.
 
 The first build links the project to your Expo account and creates the app's signing key (answer
 yes to both questions). When the build finishes, the terminal and the Expo website show a link to
