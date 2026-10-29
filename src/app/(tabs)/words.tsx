@@ -52,7 +52,7 @@ export default function WordsScreen() {
             <ThemedText themeColor="textSecondary">
               {search ? 'Nothing found.' : 'No words yet. Import a word list on the Practice tab.'}
             </ThemedText>
-          ) : null
+          ) : undefined
         }
         renderItem={({ item }) => {
           const stage = stageOf(data?.progress.get(item.id));

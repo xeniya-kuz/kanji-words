@@ -8,7 +8,7 @@ export async function shareBackup(backup: Backup): Promise<void> {
   if (!(await Sharing.isAvailableAsync())) throw new Error('Sharing is not available on this device.');
   const file = new File(Paths.cache, backupFileName());
   file.create({ overwrite: true });
-  file.write(JSON.stringify(backup));
+  await file.write(JSON.stringify(backup));
   try {
     await Sharing.shareAsync(file.uri, { mimeType: 'application/json', dialogTitle: 'Save your Kanji Words backup' });
   } finally {
