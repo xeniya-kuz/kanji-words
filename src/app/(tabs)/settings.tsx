@@ -9,14 +9,17 @@ import { Card } from '@/components/card';
 import { Screen } from '@/components/screen';
 import { Segmented } from '@/components/segmented';
 import { ThemedText } from '@/components/themed-text';
+import { backupSummary, createBackup, type Backup } from '@/core/backup';
 import { MAX_COURSE_LIMIT, SESSION_SIZES, type Settings } from '@/core/settings';
 import { Spacing } from '@/constants/theme';
+import { readBackupContent, restoreBackup } from '@/db/backup';
 import { deleteAllNotes, getDeckSummaries } from '@/db/notes';
 import { resetProgress } from '@/db/progress';
 import { countUserKanji, deleteUserKanji } from '@/db/user-kanji';
 import { useFocusQuery } from '@/hooks/use-focus-query';
 import { useTheme } from '@/hooks/use-theme';
 import { updateSettings, useSettings } from '@/state/settings';
+import { pickBackup, shareBackup } from '@/utils/backup-file';
 import { formatDeck } from '@/utils/format';
 
 const SOURCE_URL = 'https://github.com/xeniya-kuz/kanji-words';
@@ -37,6 +40,7 @@ export default function SettingsScreen() {
   );
   const { data, reload } = useFocusQuery(query);
   const [limitText, setLimitText] = useState(String(settings.courseLimit));
+  const [backupBusy, setBackupBusy] = useState(false);
 
   const confirm = (title: string, message: string, action: () => Promise<void>) =>
     Alert.alert(title, message, [
@@ -49,6 +53,56 @@ export default function SettingsScreen() {
         },
       },
     ]);
+
+  const failure = (title: string, e: unknown) => Alert.alert(title, e instanceof Error ? e.message : String(e));
+
+  const backUp = async () => {
+    setBackupBusy(true);
+    try {
+      await shareBackup(createBackup(await readBackupContent(db, settings)));
+    } catch (e) {
+      failure("Couldn't create the backup", e);
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  const restore = async () => {
+    let backup: Backup | null;
+    try {
+      backup = await pickBackup();
+    } catch (e) {
+      failure("Couldn't read the backup", e);
+      return;
+    }
+    if (!backup) return;
+    const chosen = backup;
+    Alert.alert(
+      'Restore this backup?',
+      `Made on ${new Date(chosen.exportedAt).toLocaleDateString()}:\n${backupSummary(chosen)}\n\nEverything in the app now is replaced with it.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Restore',
+          style: 'destructive',
+          onPress: async () => {
+            setBackupBusy(true);
+            try {
+              await restoreBackup(db, chosen);
+              updateSettings(chosen.settings);
+              setLimitText(String(chosen.settings.courseLimit));
+              reload();
+              Alert.alert('Backup restored');
+            } catch (e) {
+              failure("Couldn't restore the backup", e);
+            } finally {
+              setBackupBusy(false);
+            }
+          },
+        },
+      ],
+    );
+  };
 
   const setLimit = (limit: number) => {
     updateSettings({ courseLimit: limit });
@@ -168,6 +222,13 @@ export default function SettingsScreen() {
             </Card>
           </Section>
         )}
+
+        <Section
+          title="Backup"
+          hint="Saves your words, progress and settings to a file. Send it to Google Drive, your email or a messenger, and restore it later or on another phone.">
+          <Button title="Back up…" loading={backupBusy} onPress={backUp} />
+          <Button title="Restore from backup file" variant="secondary" disabled={backupBusy} onPress={restore} />
+        </Section>
 
         <Section title="Data">
           <Button title="Import words" variant="secondary" onPress={() => router.push('/import')} />
