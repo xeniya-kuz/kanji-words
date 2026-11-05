@@ -5,7 +5,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 export const APP_DB_NAME = 'app.db';
 
-const MIGRATIONS: string[] = [
+export const MIGRATIONS: string[] = [
   // 1: initial schema
   `
   CREATE TABLE note (
