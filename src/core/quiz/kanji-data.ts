@@ -19,12 +19,21 @@ export interface DictWord {
   common: boolean;
 }
 
+export interface KanjiReading {
+  reading: string;
+  kind: 'on' | 'kun';
+}
+
 export interface KanjiData {
   info(kanji: string): Promise<KanjiInfo | undefined>;
   allKanji(): Promise<KanjiInfo[]>;
   similar(kanji: string): Promise<{ kanji: string; score: number }[]>;
   kanjiWithReading(reading: string): Promise<string[]>;
   wordsWithReading(reading: string): Promise<DictWord[]>;
+  /** Hiragana readings of a kanji, with their kind (kun readings are without okurigana). */
+  readingsOfKanji(kanji: string): Promise<KanjiReading[]>;
+  /** Every dictionary reading of a written word: 今日 → きょう, こんにち. */
+  readingsOfWord(written: string): Promise<string[]>;
 }
 
 export type SqlAll = <T>(sql: string, params: (string | number)[]) => Promise<T[]>;
@@ -39,6 +48,8 @@ export function createKanjiData(all: SqlAll): KanjiData {
   const similarCache = new Map<string, Promise<{ kanji: string; score: number }[]>>();
   const readingCache = new Map<string, Promise<string[]>>();
   const wordCache = new Map<string, Promise<DictWord[]>>();
+  const kanjiReadingCache = new Map<string, Promise<KanjiReading[]>>();
+  const wordReadingCache = new Map<string, Promise<string[]>>();
   const cached = <T>(cache: Map<string, Promise<T>>, key: string, load: () => Promise<T>) => {
     let value = cache.get(key);
     if (!value) cache.set(key, (value = load()));
@@ -69,6 +80,16 @@ export function createKanjiData(all: SqlAll): KanjiData {
             [reading],
           )
         ).map((r) => ({ written: r.written, entry: r.entry, common: r.common === 1 })),
+      ),
+    readingsOfKanji: (kanji) =>
+      cached(kanjiReadingCache, kanji, async () =>
+        all<KanjiReading>('SELECT reading, kind FROM kanji_reading WHERE kanji = ?', [kanji]),
+      ),
+    readingsOfWord: (written) =>
+      cached(wordReadingCache, written, async () =>
+        (await all<{ reading: string }>('SELECT DISTINCT reading FROM word WHERE written = ?', [written])).map(
+          (r) => r.reading,
+        ),
       ),
   };
 }

@@ -6,14 +6,16 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { Screen } from '@/components/screen';
+import { Segmented } from '@/components/segmented';
 import { ThemedText } from '@/components/themed-text';
-import { sessionCounts } from '@/core/quiz/srs';
+import type { DirectionMode } from '@/core/quiz/session';
+import { askableIn, directionsOf, modeCounts } from '@/core/quiz/srs';
 import { Spacing } from '@/constants/theme';
 import { getDeckSummaries, listNotes } from '@/db/notes';
 import { getProgressMap } from '@/db/progress';
 import { countUserKanji } from '@/db/user-kanji';
 import { useFocusQuery } from '@/hooks/use-focus-query';
-import { useSettings } from '@/state/settings';
+import { updateSettings, useSettings } from '@/state/settings';
 import { formatDeck } from '@/utils/format';
 
 export default function PracticeScreen() {
@@ -22,17 +24,19 @@ export default function PracticeScreen() {
   const query = useCallback(async () => {
     const excluded = new Set(settings.excludedDecks);
     const notes = (await listNotes(db)).filter((n) => !excluded.has(n.deck ?? ''));
+    const progress = {
+      'to-kanji': await getProgressMap(db, 'to-kanji'),
+      'to-reading': await getProgressMap(db, 'to-reading'),
+    };
     return {
       decks: await getDeckSummaries(db),
-      counts: sessionCounts(
-        notes.map((n) => n.id),
-        await getProgressMap(db),
-        Date.now(),
-      ),
-      practiced: notes.length,
+      counts: modeCounts(notes, progress, settings.direction, Date.now()),
+      // Questions available in the chosen direction, e.g. words without kanji can't be asked for their reading.
+      selected: notes.length,
+      practiced: directionsOf(settings.direction).reduce((sum, d) => sum + askableIn(notes, d).length, 0),
       kanjiCount: await countUserKanji(db),
     };
-  }, [db, settings.excludedDecks]);
+  }, [db, settings.excludedDecks, settings.direction]);
   const { data } = useFocusQuery(query);
   const total = data?.decks.reduce((sum, d) => sum + d.count, 0) ?? 0;
 
@@ -60,7 +64,7 @@ export default function PracticeScreen() {
 
             <Card>
               <ThemedText type="smallBold">
-                {data.practiced === total ? `${total} words` : `${data.practiced} of ${total} words selected`}
+                {data.selected === total ? `${total} words` : `${data.selected} of ${total} words selected`}
               </ThemedText>
               {data.decks.map((d) => {
                 const off = settings.excludedDecks.includes(d.deck);
@@ -87,8 +91,21 @@ export default function PracticeScreen() {
               </ThemedText>
             )}
 
+            <View style={styles.mode}>
+              <Segmented
+                options={DIRECTION_OPTIONS}
+                value={settings.direction}
+                onChange={(direction) => updateSettings({ direction })}
+              />
+              <ThemedText type="small" themeColor="textSecondary" style={styles.modeHint}>
+                {DIRECTION_HINTS[settings.direction]}
+              </ThemedText>
+            </View>
+
             <Button
-              title={`Start practice · ${Math.min(settings.sessionSize, data.practiced)} words`}
+              title={`Start practice · ${Math.min(settings.sessionSize, data.practiced)} ${
+                settings.direction === 'mixed' ? 'questions' : 'words'
+              }`}
               disabled={data.practiced === 0}
               onPress={() => router.push('/quiz')}
             />
@@ -104,6 +121,18 @@ export default function PracticeScreen() {
     </Screen>
   );
 }
+
+const DIRECTION_OPTIONS = [
+  { value: 'to-kanji', label: 'Kanji' },
+  { value: 'to-reading', label: 'Reading' },
+  { value: 'mixed', label: 'Mixed' },
+] as const;
+
+const DIRECTION_HINTS: Record<DirectionMode, string> = {
+  'to-kanji': 'Choose how the word is written, from its reading or translation.',
+  'to-reading': 'Choose how a word written in kanji is read.',
+  mixed: 'Both kinds of questions. Each keeps its own progress.',
+};
 
 function Count({ value, label }: { value: number; label: string }) {
   return (
@@ -122,4 +151,6 @@ const styles = StyleSheet.create({
   count: { alignItems: 'center' },
   deckRow: { flexDirection: 'row', justifyContent: 'space-between', gap: Spacing.three },
   deckName: { flex: 1 },
+  mode: { gap: Spacing.two },
+  modeHint: { textAlign: 'center' },
 });

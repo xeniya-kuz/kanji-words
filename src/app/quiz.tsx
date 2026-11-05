@@ -16,7 +16,7 @@ import type { KanjiData } from '@/core/quiz/kanji-data';
 import { buildQuestion, type Question } from '@/core/quiz/question';
 import { knownKanjiSet } from '@/core/quiz/known-kanji';
 import { changedKanji, kanjiOf, score, type AnswerRecord } from '@/core/quiz/session';
-import { selectSession } from '@/core/quiz/srs';
+import { selectSessionItems, type ProgressByDirection, type SessionItem } from '@/core/quiz/srs';
 import type { Settings } from '@/core/settings';
 import { JapaneseFont, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useKanjiData } from '@/db/kanji-db';
@@ -27,14 +27,16 @@ import { useTheme } from '@/hooks/use-theme';
 import { getSettings } from '@/state/settings';
 
 interface Session {
-  /** Words to ask, in order. Words answered wrong are appended once more. */
-  notes: WordNote[];
+  /** Questions to ask, in order. Words answered wrong are appended once more. */
+  items: SessionItem<WordNote>[];
   deckWords: string[];
   known: Set<string>;
   /** Settings at the start of the session, so changing them mid-session doesn't mix things up. */
   settings: Settings;
   /** Imported words before deck filtering, to tell "no words" from "all decks turned off". */
   totalWords: number;
+  /** Words in the decks turned on, to tell "all decks turned off" from "nothing to ask this way". */
+  selectedWords: number;
 }
 
 interface Prepared {
@@ -45,13 +47,20 @@ interface Prepared {
 type SQLiteDatabase = ReturnType<typeof useSQLiteContext>;
 
 /** Builds the question and looks up keywords/meanings for every kanji in its options. */
-async function prepare(note: WordNote, session: Session, data: KanjiData, db: SQLiteDatabase): Promise<Prepared> {
+async function prepare(
+  { note, direction }: SessionItem<WordNote>,
+  session: Session,
+  data: KanjiData,
+  db: SQLiteDatabase,
+): Promise<Prepared> {
   const question = await buildQuestion(note, data, {
+    direction,
     isKnown: (k) => session.known.has(k),
     deckWords: session.deckWords.filter((w) => w !== note.word),
     difficulty: session.settings.difficulty,
   });
-  const all = kanjiOf(question.options.join(''));
+  // The kanji of the word are always needed for the explanation, the ones in the options for wrong picks.
+  const all = kanjiOf(note.word + question.options.join(''));
   const user = await getUserKanji(db, all);
   const entries = await Promise.all(
     all.map(async (k): Promise<[string, KanjiNote]> => {
@@ -95,13 +104,17 @@ export default function QuizScreen() {
       userFrames: await getUserFrames(db),
       bundled: await data.allKanji(),
     });
-    const progress = await getProgressMap(db);
+    const progress: ProgressByDirection = {
+      'to-kanji': await getProgressMap(db, 'to-kanji'),
+      'to-reading': await getProgressMap(db, 'to-reading'),
+    };
     return {
-      notes: selectSession(notes, progress, settings.sessionSize, Date.now()),
+      items: selectSessionItems(notes, progress, settings.direction, settings.sessionSize, Date.now()),
       deckWords,
       known,
       settings,
       totalWords: all.length,
+      selectedWords: notes.length,
     };
   }, [db, data]);
 
@@ -127,11 +140,11 @@ export default function QuizScreen() {
 
   // Load the current question and start preparing the next one while the learner answers.
   useEffect(() => {
-    if (!session || index >= session.notes.length) return;
+    if (!session || index >= session.items.length) return;
     const get = (i: number) => {
       let p = prepared.current.get(i);
-      if (!p && i < session.notes.length) {
-        p = prepare(session.notes[i], session, data, db);
+      if (!p && i < session.items.length) {
+        p = prepare(session.items[i], session, data, db);
         prepared.current.set(i, p);
       }
       return p;
@@ -149,14 +162,14 @@ export default function QuizScreen() {
   function answer(optionIndex: number) {
     if (!current || chosen != null) return;
     const { question } = current;
-    const { note } = question;
+    const { note, direction } = question;
     const correct = optionIndex === question.correctIndex;
     const retry = answers.some((a) => a.note.id === note.id);
     setChosen(optionIndex);
     setAnswers((list) => [...list, { note, chosen: question.options[optionIndex], correct, retry }]);
     // Only the first attempt counts for spaced repetition; a missed word is asked once more at the end.
-    recordAnswer(db, note.id, correct, !retry).catch((e) => console.warn('Could not save answer', e));
-    if (!correct && !retry) setSession((s) => s && { ...s, notes: [...s.notes, note] });
+    recordAnswer(db, note.id, correct, !retry, direction).catch((e) => console.warn('Could not save answer', e));
+    if (!correct && !retry) setSession((s) => s && { ...s, items: [...s.items, { note, direction }] });
     setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 100);
   }
 
@@ -169,20 +182,22 @@ export default function QuizScreen() {
 
   if (!session) return <Loading />;
 
-  if (session.notes.length === 0) {
+  if (session.items.length === 0) {
     return (
       <Centered>
         <ThemedText style={styles.center}>
-          {session.totalWords > 0
-            ? 'All decks are turned off. Choose decks to practice in Settings.'
-            : 'No words yet. Import a word list first.'}
+          {session.totalWords === 0
+            ? 'No words yet. Import a word list first.'
+            : session.selectedWords === 0
+              ? 'All decks are turned off. Choose decks to practice in Settings.'
+              : 'None of the selected words can be asked this way: reading questions need a word with kanji and a hiragana reading.'}
         </ThemedText>
         <Button title="Back" variant="secondary" onPress={() => router.back()} />
       </Centered>
     );
   }
 
-  if (index >= session.notes.length) {
+  if (index >= session.items.length) {
     const { correct, total } = score(answers);
     const missed = answers.filter((a) => !a.correct && !a.retry);
     return (
@@ -217,7 +232,7 @@ export default function QuizScreen() {
   if (!current) return <Loading />;
 
   const { question } = current;
-  const { note } = question;
+  const { note, direction } = question;
   const answered = chosen != null;
   const isCorrect = chosen === question.correctIndex;
   const optionState = (i: number): OptionState => {
@@ -228,10 +243,13 @@ export default function QuizScreen() {
   const breakdown = (word: string) => kanjiOf(word).map((k) => current.kanji.get(k) ?? { kanji: k });
   const chosenText = chosen != null ? question.options[chosen] : '';
   const mode = session.settings.promptMode;
+  // For a spelling the reading is the answer, so the word itself is the prompt and the translation a hint.
   // A word without a translation still needs something to show.
-  const showReading = mode !== 'translation' || !note.translation;
+  const toReading = direction === 'to-reading';
+  const showWord = toReading;
+  const showReading = !toReading && (mode !== 'translation' || !note.translation);
   const showTranslation = mode !== 'reading' && !!note.translation;
-  const isRetry = session.notes.findIndex((n) => n.id === note.id) < index;
+  const isRetry = session.items.findIndex((item) => item.note.id === note.id) < index;
 
   return (
     <ThemedView style={styles.fill}>
@@ -242,12 +260,12 @@ export default function QuizScreen() {
               <View
                 style={[
                   styles.progressFill,
-                  { backgroundColor: theme.accent, width: `${(index / session.notes.length) * 100}%` },
+                  { backgroundColor: theme.accent, width: `${(index / session.items.length) * 100}%` },
                 ]}
               />
             </View>
             <ThemedText type="small" themeColor="textSecondary">
-              {index + 1} / {session.notes.length}
+              {index + 1} / {session.items.length}
             </ThemedText>
           </View>
 
@@ -257,11 +275,12 @@ export default function QuizScreen() {
                 Once more
               </ThemedText>
             )}
+            {showWord && <Text style={[styles.reading, { color: theme.text }]}>{note.word}</Text>}
             {showReading && (
               <Text style={[styles.reading, { color: theme.text }]}>{note.readingLabel ?? note.reading}</Text>
             )}
             {showTranslation && (
-              <ThemedText style={styles.center} themeColor={showReading ? 'textSecondary' : 'text'}>
+              <ThemedText style={styles.center} themeColor={showReading || showWord ? 'textSecondary' : 'text'}>
                 {note.translation}
               </ThemedText>
             )}
@@ -295,7 +314,7 @@ export default function QuizScreen() {
           )}
 
           {answered && (
-            <Button title={index + 1 < session.notes.length ? 'Next' : 'See results'} onPress={next} />
+            <Button title={index + 1 < session.items.length ? 'Next' : 'See results'} onPress={next} />
           )}
         </ScrollView>
       </SafeAreaView>

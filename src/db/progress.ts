@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import type { WordNote } from '@/core/import/import-words';
+import type { Direction } from '@/core/quiz/session';
 import { schedule, type Progress } from '@/core/quiz/srs';
 
 interface ProgressRow {
@@ -21,30 +22,46 @@ const fromRow = (r: ProgressRow): Progress => ({
   lastSeen: r.last_seen,
 });
 
-export async function getProgressMap(db: SQLiteDatabase): Promise<Map<string, Progress>> {
-  const rows = await db.getAllAsync<ProgressRow>('SELECT * FROM progress');
+/** Progress by word id for one direction; the two directions are learned separately. */
+export async function getProgressMap(
+  db: SQLiteDatabase,
+  direction: Direction = 'to-kanji',
+): Promise<Map<string, Progress>> {
+  const rows = await db.getAllAsync<ProgressRow>('SELECT * FROM progress WHERE direction = ?', direction);
   return new Map(rows.map((r) => [r.note_id, fromRow(r)]));
 }
 
 /** Logs an answer; only the first attempt at a word in a session moves it between boxes. */
-export async function recordAnswer(db: SQLiteDatabase, noteId: string, correct: boolean, scheduleIt: boolean) {
+export async function recordAnswer(
+  db: SQLiteDatabase,
+  noteId: string,
+  correct: boolean,
+  scheduleIt: boolean,
+  direction: Direction = 'to-kanji',
+) {
   const now = Date.now();
   await db.withExclusiveTransactionAsync(async (txn) => {
     await txn.runAsync(
-      'INSERT INTO answer_log (note_id, correct, answered_at) VALUES (?, ?, ?)',
+      'INSERT INTO answer_log (note_id, correct, answered_at, direction) VALUES (?, ?, ?, ?)',
       noteId,
       correct ? 1 : 0,
       now,
+      direction,
     );
     if (!scheduleIt) return;
-    const row = await txn.getFirstAsync<ProgressRow>('SELECT * FROM progress WHERE note_id = ?', noteId);
+    const row = await txn.getFirstAsync<ProgressRow>(
+      'SELECT * FROM progress WHERE note_id = ? AND direction = ?',
+      noteId,
+      direction,
+    );
     const next = schedule(row ? fromRow(row) : undefined, noteId, correct, now);
     await txn.runAsync(
-      `INSERT INTO progress (note_id, box, due_at, correct, wrong, last_seen) VALUES (?, ?, ?, ?, ?, ?)
-       ON CONFLICT (note_id) DO UPDATE SET
+      `INSERT INTO progress (note_id, direction, box, due_at, correct, wrong, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (note_id, direction) DO UPDATE SET
          box = excluded.box, due_at = excluded.due_at, correct = excluded.correct,
          wrong = excluded.wrong, last_seen = excluded.last_seen`,
       noteId,
+      direction,
       next.box,
       next.dueAt,
       next.correct,
@@ -63,10 +80,14 @@ export interface AnswerTotals {
   correct: number;
 }
 
-export async function answerTotals(db: SQLiteDatabase, since = 0): Promise<AnswerTotals> {
+/** Answers since a time, for one direction or (without) all of them. */
+export async function answerTotals(db: SQLiteDatabase, since = 0, direction?: Direction): Promise<AnswerTotals> {
   const row = await db.getFirstAsync<{ total: number; correct: number | null }>(
-    'SELECT COUNT(*) AS total, SUM(correct) AS correct FROM answer_log WHERE answered_at >= ?',
+    `SELECT COUNT(*) AS total, SUM(correct) AS correct FROM answer_log
+     WHERE answered_at >= ? AND (? IS NULL OR direction = ?)`,
     since,
+    direction ?? null,
+    direction ?? null,
   );
   return { total: row?.total ?? 0, correct: row?.correct ?? 0 };
 }
@@ -85,8 +106,8 @@ export interface MissedWord {
   correct: number;
 }
 
-/** Words answered wrong most often (only words that are still imported). */
-export async function mostMissed(db: SQLiteDatabase, limit = 10): Promise<MissedWord[]> {
+/** Words answered wrong most often in a direction (only words that are still imported). */
+export async function mostMissed(db: SQLiteDatabase, direction: Direction, limit = 10): Promise<MissedWord[]> {
   const rows = await db.getAllAsync<{
     id: string;
     word: string;
@@ -98,9 +119,10 @@ export async function mostMissed(db: SQLiteDatabase, limit = 10): Promise<Missed
   }>(
     `SELECT n.id, n.word, n.reading, n.translation, n.furigana, p.wrong, p.correct
      FROM progress p JOIN note n ON n.id = p.note_id
-     WHERE p.wrong > 0
+     WHERE p.direction = ? AND p.wrong > 0
      ORDER BY p.wrong DESC, p.correct ASC
      LIMIT ?`,
+    direction,
     limit,
   );
   return rows.map((r) => ({

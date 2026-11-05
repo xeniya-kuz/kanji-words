@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import type { Backup, BackupContent } from '@/core/backup';
+import type { Direction } from '@/core/quiz/session';
 import type { Settings } from '@/core/settings';
 
 export async function readBackupContent(db: SQLiteDatabase, settings: Settings): Promise<BackupContent> {
@@ -12,8 +13,8 @@ export async function readBackupContent(db: SQLiteDatabase, settings: Settings):
     'SELECT kind, note_type, mapping FROM import_profile',
   );
   const progress = await db.getAllAsync<Record<string, number | string>>('SELECT * FROM progress');
-  const answers = await db.getAllAsync<{ note_id: string; correct: number; answered_at: number }>(
-    'SELECT note_id, correct, answered_at FROM answer_log ORDER BY answered_at, id',
+  const answers = await db.getAllAsync<{ note_id: string; correct: number; answered_at: number; direction: Direction }>(
+    'SELECT note_id, correct, answered_at, direction FROM answer_log ORDER BY answered_at, id',
   );
 
   return {
@@ -39,13 +40,14 @@ export async function readBackupContent(db: SQLiteDatabase, settings: Settings):
     importProfiles: profiles.map((r) => ({ kind: r.kind, noteType: r.note_type, mapping: JSON.parse(r.mapping) })),
     progress: progress.map((r) => ({
       noteId: r.note_id as string,
+      direction: r.direction as Direction,
       box: r.box as number,
       dueAt: r.due_at as number,
       correct: r.correct as number,
       wrong: r.wrong as number,
       lastSeen: r.last_seen as number,
     })),
-    answers: answers.map((r) => [r.note_id, r.correct ? 1 : 0, r.answered_at]),
+    answers: answers.map((r) => [r.note_id, r.correct ? 1 : 0, r.answered_at, r.direction]),
   };
 }
 
@@ -93,10 +95,14 @@ export async function restoreBackup(db: SQLiteDatabase, backup: Backup) {
       (p) => [p.kind, p.noteType, JSON.stringify(p.mapping)],
     );
     await insertAll(
-      'INSERT OR REPLACE INTO progress (note_id, box, due_at, correct, wrong, last_seen) VALUES (?, ?, ?, ?, ?, ?)',
+      'INSERT OR REPLACE INTO progress (note_id, direction, box, due_at, correct, wrong, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?)',
       backup.progress,
-      (p) => [p.noteId, p.box, p.dueAt, p.correct, p.wrong, p.lastSeen],
+      (p) => [p.noteId, p.direction, p.box, p.dueAt, p.correct, p.wrong, p.lastSeen],
     );
-    await insertAll('INSERT INTO answer_log (note_id, correct, answered_at) VALUES (?, ?, ?)', backup.answers, (a) => a);
+    await insertAll(
+      'INSERT INTO answer_log (note_id, correct, answered_at, direction) VALUES (?, ?, ?, ?)',
+      backup.answers,
+      (a) => a,
+    );
   });
 }

@@ -23,6 +23,13 @@ export function changedKanji(correct: string, chosen: string): string[] {
 
 export type PromptMode = 'reading' | 'translation' | 'both';
 
+/** What is asked: the spelling for a reading ("to-kanji") or the reading for a spelling ("to-reading"). */
+export type Direction = 'to-kanji' | 'to-reading';
+export const DIRECTIONS: readonly Direction[] = ['to-kanji', 'to-reading'];
+
+/** The practice setting: one direction, or both mixed in a session. */
+export type DirectionMode = Direction | 'mixed';
+
 export interface AnswerRecord<W> {
   note: W;
   chosen: string;

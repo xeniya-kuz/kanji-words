@@ -19,10 +19,14 @@ const content: BackupContent = {
   ],
   userKanji: [{ kanji: '山', keyword: 'mountain', frame: 12, onyomi: ['サン'], kunyomi: ['やま'] }],
   importProfiles: [{ kind: 'words', noteType: 'Basic', mapping: { word: 0, reading: 1 } }],
-  progress: [{ noteId: 'a', box: 2, dueAt: 5000, correct: 3, wrong: 1, lastSeen: 4000 }],
+  progress: [
+    { noteId: 'a', direction: 'to-kanji', box: 2, dueAt: 5000, correct: 3, wrong: 1, lastSeen: 4000 },
+    { noteId: 'a', direction: 'to-reading', box: 1, dueAt: 6000, correct: 1, wrong: 0, lastSeen: 4500 },
+  ],
   answers: [
-    ['a', 1, 3000],
-    ['a', 0, 4000],
+    ['a', 1, 3000, 'to-kanji'],
+    ['a', 0, 4000, 'to-kanji'],
+    ['a', 1, 4500, 'to-reading'],
   ],
 };
 
@@ -34,8 +38,25 @@ describe('backup', () => {
 
   it('summarizes what it holds', () => {
     expect(backupSummary(createBackup(content))).toBe(
-      '2 words\n1 kanji in your kanji deck\nprogress on 1 words\n2 logged answers',
+      '2 words\n1 kanji in your kanji deck\nprogress on 1 words\n3 logged answers',
     );
+  });
+
+  it('reads version 1 backups, where everything is "reading → kanji"', () => {
+    const old = {
+      ...createBackup(content),
+      version: 1,
+      progress: [{ noteId: 'a', box: 2, dueAt: 5000, correct: 3, wrong: 1, lastSeen: 4000 }],
+      answers: [['a', 1, 3000]],
+    };
+    const parsed = parseBackup(JSON.stringify(old));
+    expect(parsed.progress).toEqual([{ ...old.progress[0], direction: 'to-kanji' }]);
+    expect(parsed.answers).toEqual([['a', 1, 3000, 'to-kanji']]);
+  });
+
+  it('rejects an unknown direction', () => {
+    const bad = { ...createBackup(content), answers: [['a', 1, 3000, 'sideways']] };
+    expect(() => parseBackup(JSON.stringify(bad))).toThrow('damaged');
   });
 
   it('names the file by date', () => {

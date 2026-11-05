@@ -58,6 +58,25 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE note ADD COLUMN reading_label TEXT;
   `,
+  // 4: progress per direction: 'to-kanji' (reading → spelling) and 'to-reading' (spelling → reading)
+  `
+  ALTER TABLE answer_log ADD COLUMN direction TEXT NOT NULL DEFAULT 'to-kanji';
+
+  CREATE TABLE progress_by_direction (
+    note_id   TEXT NOT NULL,
+    direction TEXT NOT NULL,
+    box       INTEGER NOT NULL,
+    due_at    INTEGER NOT NULL,
+    correct   INTEGER NOT NULL,
+    wrong     INTEGER NOT NULL,
+    last_seen INTEGER NOT NULL,
+    PRIMARY KEY (note_id, direction)
+  );
+  INSERT INTO progress_by_direction (note_id, direction, box, due_at, correct, wrong, last_seen)
+    SELECT note_id, 'to-kanji', box, due_at, correct, wrong, last_seen FROM progress;
+  DROP TABLE progress;
+  ALTER TABLE progress_by_direction RENAME TO progress;
+  `,
 ];
 
 /** Runs the migrations the database hasn't seen yet (tracked in PRAGMA user_version). */

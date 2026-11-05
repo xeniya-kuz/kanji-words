@@ -3,11 +3,13 @@
 
 import type { KanjiEntry } from './import/import-kanji';
 import type { WordNote } from './import/import-words';
+import { DIRECTIONS, type Direction } from './quiz/session';
 import type { Progress } from './quiz/srs';
 import { normalizeSettings, type Settings } from './settings';
 
 export const BACKUP_FORMAT = 'kanji-words-backup';
-export const BACKUP_VERSION = 1;
+// Version 2 added the direction (spelling → reading) to progress and answers; version 1 files are all 'to-kanji'.
+export const BACKUP_VERSION = 2;
 
 export interface BackupNote extends WordNote {
   importedAt: number;
@@ -19,8 +21,13 @@ export interface BackupProfile {
   mapping: unknown;
 }
 
-/** One logged answer: [note id, correct (1/0), time]. Tuples keep a long history small. */
-export type BackupAnswer = [noteId: string, correct: 0 | 1, answeredAt: number];
+/** Progress on a word in one direction. */
+export interface BackupProgress extends Progress {
+  direction: Direction;
+}
+
+/** One logged answer: [note id, correct (1/0), time, direction]. Tuples keep a long history small. */
+export type BackupAnswer = [noteId: string, correct: 0 | 1, answeredAt: number, direction: Direction];
 
 export interface Backup {
   format: typeof BACKUP_FORMAT;
@@ -30,7 +37,7 @@ export interface Backup {
   notes: BackupNote[];
   userKanji: KanjiEntry[];
   importProfiles: BackupProfile[];
-  progress: Progress[];
+  progress: BackupProgress[];
   answers: BackupAnswer[];
 }
 
@@ -48,7 +55,7 @@ export function backupFileName(now = new Date()): string {
 export function backupSummary(backup: Backup): string {
   const lines = [`${backup.notes.length} words`];
   if (backup.userKanji.length) lines.push(`${backup.userKanji.length} kanji in your kanji deck`);
-  lines.push(`progress on ${backup.progress.length} words`, `${backup.answers.length} logged answers`);
+  lines.push(`progress on ${new Set(backup.progress.map((p) => p.noteId)).size} words`, `${backup.answers.length} logged answers`);
   return lines.join('\n');
 }
 
@@ -98,10 +105,17 @@ function parseProfile(raw: unknown): BackupProfile {
   return { kind: str(p.kind, 'mapping kind'), noteType: str(p.noteType, 'note type'), mapping: record(p.mapping, 'mapping') };
 }
 
-function parseProgress(raw: unknown): Progress {
+/** Backups from before version 2 have no direction: everything was "reading → spelling". */
+function direction(v: unknown): Direction {
+  if (v == null) return 'to-kanji';
+  return DIRECTIONS.includes(v as Direction) ? (v as Direction) : fail('direction');
+}
+
+function parseProgress(raw: unknown): BackupProgress {
   const p = record(raw, 'progress');
   return {
     noteId: str(p.noteId, 'progress id'),
+    direction: direction(p.direction),
     box: num(p.box, 'box'),
     dueAt: num(p.dueAt, 'due time'),
     correct: num(p.correct, 'correct count'),
@@ -112,7 +126,7 @@ function parseProgress(raw: unknown): Progress {
 
 function parseAnswer(raw: unknown): BackupAnswer {
   const a = list(raw, 'an answer');
-  return [str(a[0], 'answer id'), num(a[1], 'answer result') ? 1 : 0, num(a[2], 'answer time')];
+  return [str(a[0], 'answer id'), num(a[1], 'answer result') ? 1 : 0, num(a[2], 'answer time'), direction(a[3])];
 }
 
 /** Parses and validates the text of a backup file; throws an Error with a user-readable message. */

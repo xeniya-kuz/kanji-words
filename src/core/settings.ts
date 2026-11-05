@@ -1,5 +1,5 @@
 import type { Difficulty } from './quiz/distractors';
-import type { PromptMode } from './quiz/session';
+import type { DirectionMode, PromptMode } from './quiz/session';
 
 /**
  * Which kanji count as "known" when ranking wrong answers:
@@ -11,6 +11,8 @@ import type { PromptMode } from './quiz/session';
 export type KnownKanjiMode = 'deck' | 'course' | 'joyo';
 
 export interface Settings {
+  /** Reading → spelling, spelling → reading, or both mixed. */
+  direction: DirectionMode;
   promptMode: PromptMode;
   sessionSize: number;
   difficulty: Difficulty;
@@ -25,6 +27,7 @@ export const SESSION_SIZES = [10, 20, 50] as const;
 export const MAX_COURSE_LIMIT = 6000;
 
 export const DEFAULT_SETTINGS: Settings = {
+  direction: 'to-kanji',
   promptMode: 'both',
   sessionSize: 20,
   difficulty: 'normal',
@@ -44,6 +47,7 @@ export function normalizeSettings(raw: unknown): Settings {
   const knownKanji = s.knownKanji === 'rtk' ? 'course' : s.knownKanji;
   const courseLimit = s.courseLimit ?? s.rtkFrame;
   return {
+    direction: oneOf(s.direction, ['to-kanji', 'to-reading', 'mixed'] as const, d.direction),
     promptMode: oneOf(s.promptMode, ['reading', 'translation', 'both'] as const, d.promptMode),
     sessionSize: oneOf(s.sessionSize, SESSION_SIZES, d.sessionSize as (typeof SESSION_SIZES)[number]),
     difficulty: oneOf(s.difficulty, ['easy', 'normal', 'hard'] as const, d.difficulty),
