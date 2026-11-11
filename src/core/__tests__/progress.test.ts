@@ -1,6 +1,15 @@
 import { knownKanjiSet } from '../quiz/known-kanji';
 import type { KanjiInfo } from '../quiz/kanji-data';
-import { BOX_INTERVALS, MAX_BOX, schedule, selectSession, sessionCounts, type Progress } from '../quiz/srs';
+import {
+  BOX_INTERVALS,
+  MAX_BOX,
+  buildQueue,
+  modeCounts,
+  schedule,
+  selectExtraItems,
+  type ProgressByDirection,
+  type Progress,
+} from '../quiz/srs';
 import { DEFAULT_SETTINGS, normalizeSettings } from '../settings';
 import { accuracy, dayKey, streakDays } from '../stats';
 
@@ -30,28 +39,76 @@ describe('schedule', () => {
   });
 });
 
-describe('selectSession', () => {
-  const notes = ['due-old', 'due-new', 'fresh1', 'fresh2', 'later-box1', 'later-box4'].map((id) => ({ id }));
-  const progress = new Map<string, Progress>(
-    (
-      [
-        ['due-old', 2, NOW - 2 * DAY],
-        ['due-new', 1, NOW - 1000],
-        ['later-box1', 1, NOW + DAY],
-        ['later-box4', 4, NOW + 5 * DAY],
-      ] as const
-    ).map(([noteId, box, dueAt]) => [noteId, { noteId, box, dueAt, correct: 1, wrong: 0, lastSeen: 0 }]),
-  );
+describe('daily queue', () => {
+  const word = (id: string) => ({ id, word: '学校', reading: 'がっこう' });
+  const notes = ['due-old', 'due-new', 'missed', 'fresh1', 'fresh2', 'fresh3', 'later-box1', 'later-box4'].map(word);
+  const entry = (noteId: string, box: number, dueAt: number): [string, Progress] => [
+    noteId,
+    { noteId, box, dueAt, correct: 1, wrong: 0, lastSeen: 0 },
+  ];
+  const progress: ProgressByDirection = {
+    'to-kanji': new Map([
+      entry('due-old', 2, NOW - 2 * DAY),
+      entry('due-new', 1, NOW - 1000),
+      entry('missed', 0, NOW - 1000),
+      entry('later-box1', 1, NOW + DAY),
+      entry('later-box4', 4, NOW + 5 * DAY),
+    ]),
+    'to-reading': new Map(),
+  };
+  const nothingDone = { newDone: 0, reviewsDone: 0 };
+  const ids = (limits: { newPerDay: number; reviewsPerDay: number }, today = nothingDone) =>
+    buildQueue(notes, progress, 'to-kanji', limits, today, NOW, () => 0.5)
+      .items.map((i) => i.note.id)
+      .sort();
 
-  it('takes due words first, then new ones, then the least known', () => {
-    const ids = (size: number) => selectSession(notes, progress, size, NOW, () => 0.5).map((n) => n.id).sort();
-    expect(ids(2)).toEqual(['due-new', 'due-old']);
-    expect(ids(4)).toEqual(['due-new', 'due-old', 'fresh1', 'fresh2']);
-    expect(ids(5)).toEqual(['due-new', 'due-old', 'fresh1', 'fresh2', 'later-box1']);
+  it('holds the due words and as many new ones as the limit allows, and nothing else', () => {
+    const limited = ids({ newPerDay: 2, reviewsPerDay: 200 });
+    expect(limited.filter((id) => !id.startsWith('fresh'))).toEqual(['due-new', 'due-old', 'missed']);
+    expect(limited.filter((id) => id.startsWith('fresh'))).toHaveLength(2);
+    // Words that aren't due yet are never added to fill the queue.
+    expect(ids({ newPerDay: 50, reviewsPerDay: 200 })).toEqual([
+      'due-new',
+      'due-old',
+      'fresh1',
+      'fresh2',
+      'fresh3',
+      'missed',
+    ]);
   });
 
-  it('counts due, new and learned words', () => {
-    expect(sessionCounts(notes.map((n) => n.id), progress, NOW)).toEqual({ due: 2, fresh: 2, learned: 1 });
+  it('has no new words once the new words of the day are done', () => {
+    expect(ids({ newPerDay: 3, reviewsPerDay: 200 }, { newDone: 3, reviewsDone: 0 })).toEqual([
+      'due-new',
+      'due-old',
+      'missed',
+    ]);
+  });
+
+  it('limits reviews, most overdue first, but not words that were missed', () => {
+    expect(ids({ newPerDay: 0, reviewsPerDay: 1 })).toEqual(['due-old', 'missed']);
+    expect(ids({ newPerDay: 0, reviewsPerDay: 5 }, { newDone: 0, reviewsDone: 5 })).toEqual(['missed']);
+  });
+
+  it('is empty when everything for today is done', () => {
+    const limits = { newPerDay: 20, reviewsPerDay: 200 };
+    const done = buildQueue(notes.slice(6), progress, 'to-kanji', limits, nothingDone, NOW);
+    expect(done).toEqual({ items: [], fresh: 0, due: 0 });
+  });
+
+  it('counts what the queue holds, and everything learned', () => {
+    const limits = { newPerDay: 1, reviewsPerDay: 200 };
+    expect(modeCounts(notes, progress, 'to-kanji', limits, nothingDone, NOW)).toEqual({ due: 3, fresh: 1, learned: 1 });
+  });
+
+  it('offers started words that are not due for practicing ahead, the least known first', () => {
+    const ahead = selectExtraItems(notes, progress, 'to-kanji', 1, NOW, () => 0.5);
+    expect(ahead.map((i) => i.note.id)).toEqual(['later-box1']);
+    expect(
+      selectExtraItems(notes, progress, 'to-kanji', 10, NOW)
+        .map((i) => i.note.id)
+        .sort(),
+    ).toEqual(['later-box1', 'later-box4']);
   });
 });
 
@@ -59,8 +116,22 @@ describe('normalizeSettings', () => {
   it('fills in defaults and rejects invalid values', () => {
     expect(normalizeSettings(null)).toEqual(DEFAULT_SETTINGS);
     expect(
-      normalizeSettings({ promptMode: 'reading', sessionSize: 33, courseLimit: 99999, excludedDecks: ['a', 1] }),
-    ).toEqual({ ...DEFAULT_SETTINGS, promptMode: 'reading', courseLimit: 6000, excludedDecks: ['a'] });
+      normalizeSettings({
+        promptMode: 'reading',
+        sessionSize: 33,
+        newPerDay: 12.4,
+        reviewsPerDay: -5,
+        courseLimit: 99999,
+        excludedDecks: ['a', 1],
+      }),
+    ).toEqual({
+      ...DEFAULT_SETTINGS,
+      promptMode: 'reading',
+      newPerDay: 12,
+      reviewsPerDay: 0,
+      courseLimit: 6000,
+      excludedDecks: ['a'],
+    });
   });
 
   it('converts settings saved by earlier versions', () => {

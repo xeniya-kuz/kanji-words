@@ -2,6 +2,7 @@
 //
 // A correct answer moves a word up one box and schedules it further away; a wrong answer puts it
 // back in box 0, due again in 10 minutes. Words in box 3 or higher count as learned.
+// How much is practiced per day follows Anki: a limit for new words and one for reviews.
 
 import { canAskReading } from './reading-distractors';
 import { DIRECTIONS, shuffle, type Direction, type DirectionMode } from './session';
@@ -40,55 +41,6 @@ export function schedule(previous: Progress | undefined, noteId: string, correct
   };
 }
 
-export interface SessionCounts {
-  due: number;
-  fresh: number;
-  learned: number;
-}
-
-export function sessionCounts(noteIds: string[], progress: Map<string, Progress>, now: number): SessionCounts {
-  let due = 0;
-  let fresh = 0;
-  let learned = 0;
-  for (const id of noteIds) {
-    const p = progress.get(id);
-    if (!p) fresh++;
-    else {
-      if (p.dueAt <= now) due++;
-      if (p.box >= LEARNED_BOX) learned++;
-    }
-  }
-  return { due, fresh, learned };
-}
-
-/**
- * Picks the words for a session: due words first (most overdue first), then new words,
- * then — if there is still room — the least-known words that aren't due yet. The result is shuffled.
- */
-export function selectSession<T extends { id: string }>(
-  notes: T[],
-  progress: Map<string, Progress>,
-  size: number,
-  now: number,
-  random: () => number = Math.random,
-): T[] {
-  const due: T[] = [];
-  const fresh: T[] = [];
-  const rest: T[] = [];
-  for (const note of notes) {
-    const p = progress.get(note.id);
-    if (!p) fresh.push(note);
-    else if (p.dueAt <= now) due.push(note);
-    else rest.push(note);
-  }
-  const at = (n: T) => progress.get(n.id)!;
-  due.sort((a, b) => at(a).dueAt - at(b).dueAt);
-  rest.sort((a, b) => at(a).box - at(b).box || at(a).dueAt - at(b).dueAt);
-
-  const picked = [...due, ...shuffle(fresh, random), ...rest].slice(0, size);
-  return shuffle(picked, random);
-}
-
 /** Progress of every word, one map per direction. */
 export type ProgressByDirection = Record<Direction, Map<string, Progress>>;
 
@@ -107,28 +59,112 @@ export function askableIn<T extends AskableWord>(notes: T[], direction: Directio
   return direction === 'to-reading' ? notes.filter(canAskReading) : notes;
 }
 
-/** Due/new/learned counts over everything a setting practices; a word counts once per direction. */
+export interface SessionCounts {
+  due: number;
+  fresh: number;
+  learned: number;
+}
+
+/** The daily limits, as in Anki's deck options. */
+export interface DailyLimits {
+  newPerDay: number;
+  reviewsPerDay: number;
+}
+
+/** What was already practiced today, in questions: a word counts once per direction. */
+export interface TodayStats {
+  newDone: number;
+  reviewsDone: number;
+}
+
+export interface Queue<T> {
+  /** Today's questions in random order. */
+  items: SessionItem<T>[];
+  /** Questions in `items` about words never seen before. */
+  fresh: number;
+  /** Questions in `items` about words that are due. */
+  due: number;
+}
+
+/**
+ * Today's queue, the way Anki builds it:
+ * - words in box 0 (missed, back in 10 minutes) always come back, they are not limited;
+ * - due words from higher boxes, most overdue first, up to the daily review limit minus the reviews done today;
+ * - new words, up to the daily new limit minus the new words started today.
+ * Nothing else is added, so the queue can be empty: that means "done for today". Each direction is scheduled
+ * on its own progress; in a mixed queue a word is asked only once, since one answer would give away the other.
+ */
+export function buildQueue<T extends AskableWord>(
+  notes: T[],
+  progress: ProgressByDirection,
+  mode: DirectionMode,
+  limits: DailyLimits,
+  today: TodayStats,
+  now: number,
+  random: () => number = Math.random,
+): Queue<T> {
+  const learning: SessionItem<T>[] = [];
+  const review: SessionItem<T>[] = [];
+  const fresh: SessionItem<T>[] = [];
+  for (const direction of directionsOf(mode)) {
+    for (const note of askableIn(notes, direction)) {
+      const p = progress[direction].get(note.id);
+      const item = { note, direction };
+      if (!p) fresh.push(item);
+      else if (p.dueAt <= now) (p.box === 0 ? learning : review).push(item);
+    }
+  }
+  const dueAt = (item: SessionItem<T>) => progress[item.direction].get(item.note.id)!.dueAt;
+  const overdueFirst = (a: SessionItem<T>, b: SessionItem<T>) => dueAt(a) - dueAt(b);
+
+  const asked = new Set<string>();
+  const take = (candidates: SessionItem<T>[], limit: number) => {
+    const taken: SessionItem<T>[] = [];
+    for (const item of candidates) {
+      if (taken.length >= limit) break;
+      if (asked.has(item.note.id)) continue;
+      asked.add(item.note.id);
+      taken.push(item);
+    }
+    return taken;
+  };
+  const relearn = take(learning.sort(overdueFirst), Infinity);
+  const reviews = take(review.sort(overdueFirst), Math.max(0, limits.reviewsPerDay - today.reviewsDone));
+  const introduced = take(shuffle(fresh, random), Math.max(0, limits.newPerDay - today.newDone));
+  return {
+    items: shuffle([...relearn, ...reviews, ...introduced], random),
+    fresh: introduced.length,
+    due: relearn.length + reviews.length,
+  };
+}
+
+/** Due/new/learned counts for the home screen. Due and new are what today's queue holds, learned is everything. */
 export function modeCounts<T extends AskableWord>(
   notes: T[],
   progress: ProgressByDirection,
   mode: DirectionMode,
+  limits: DailyLimits,
+  today: TodayStats,
   now: number,
 ): SessionCounts {
-  const total: SessionCounts = { due: 0, fresh: 0, learned: 0 };
+  const { fresh, due } = buildQueue(notes, progress, mode, limits, today, now);
+  let learned = 0;
   for (const direction of directionsOf(mode)) {
-    const counts = sessionCounts(askableIn(notes, direction).map((n) => n.id), progress[direction], now);
-    total.due += counts.due;
-    total.fresh += counts.fresh;
-    total.learned += counts.learned;
+    for (const note of askableIn(notes, direction)) {
+      if ((progress[direction].get(note.id)?.box ?? 0) >= LEARNED_BOX) learned++;
+    }
   }
-  return total;
+  return { due, fresh, learned };
 }
 
+/** How many questions "practice ahead" offers at a time. */
+export const EXTRA_PRACTICE_SIZE = 20;
+
 /**
- * Picks the questions for a session. Each direction is scheduled on its own progress; a mixed session
- * takes half from each and never asks the same word twice, since one answer would give away the other.
+ * Extra practice once the day's queue is done (Anki's "study ahead"): words that were started but aren't due yet,
+ * the least known first. Never new words — those are limited by the daily setting.
  */
-export function selectSessionItems<T extends AskableWord>(
+export function selectExtraItems<T extends AskableWord>(
   notes: T[],
   progress: ProgressByDirection,
   mode: DirectionMode,
@@ -136,20 +172,21 @@ export function selectSessionItems<T extends AskableWord>(
   now: number,
   random: () => number = Math.random,
 ): SessionItem<T>[] {
-  const directions = directionsOf(mode);
-  const share = Math.ceil(size / directions.length);
-  const items = directions.flatMap((direction) =>
-    selectSession(askableIn(notes, direction), progress[direction], share, now, random).map((note) => ({
-      note,
-      direction,
-    })),
-  );
-  const seen = new Set<string>();
-  const unique: SessionItem<T>[] = [];
-  for (const item of shuffle(items, random)) {
-    if (seen.has(item.note.id)) continue;
-    seen.add(item.note.id);
-    unique.push(item);
+  const ahead: { item: SessionItem<T>; p: Progress }[] = [];
+  for (const direction of directionsOf(mode)) {
+    for (const note of askableIn(notes, direction)) {
+      const p = progress[direction].get(note.id);
+      if (p && p.dueAt > now) ahead.push({ item: { note, direction }, p });
+    }
   }
-  return unique.slice(0, size);
+  ahead.sort((a, b) => a.p.box - b.p.box || a.p.dueAt - b.p.dueAt);
+  const asked = new Set<string>();
+  const picked: SessionItem<T>[] = [];
+  for (const { item } of ahead) {
+    if (picked.length >= size) break;
+    if (asked.has(item.note.id)) continue;
+    asked.add(item.note.id);
+    picked.push(item);
+  }
+  return shuffle(picked, random);
 }

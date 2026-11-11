@@ -7,7 +7,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { createBackup, parseBackup, type BackupContent } from '@/core/backup';
 import { DEFAULT_SETTINGS } from '@/core/settings';
 import { readBackupContent, restoreBackup } from '../backup';
-import { answerTotals, getProgressMap, mostMissed, recordAnswer, resetProgress } from '../progress';
+import { answerTotals, getProgressMap, getTodayStats, mostMissed, recordAnswer, resetProgress } from '../progress';
 import { MIGRATIONS, migrateAppDb } from '../schema';
 
 const { DatabaseSync } = process.getBuiltinModule('node:sqlite') as typeof import('node:sqlite');
@@ -219,6 +219,26 @@ describe('progress by direction', () => {
 
     expect((await mostMissed(db, 'to-reading')).map((m) => m.note.id)).toEqual(['a']);
     expect((await mostMissed(db, 'to-kanji')).map((m) => m.note.id)).toEqual(['b']);
+  });
+
+  it("counts today's new words and reviews from the answer history", async () => {
+    const db = await newDb();
+    const log = (note: string, direction: string, at: number) =>
+      db.runAsync(
+        'INSERT INTO answer_log (note_id, correct, answered_at, direction) VALUES (?, 1, ?, ?)',
+        note,
+        at,
+        direction,
+      );
+    await log('old', 'to-kanji', 1000); // first seen before today, reviewed today
+    await log('old', 'to-kanji', 5000);
+    await log('old', 'to-kanji', 5100); // a repeat attempt doesn't count twice
+    await log('old', 'to-reading', 5200); // new today in the other direction
+    await log('fresh', 'to-kanji', 5300);
+    await log('fresh', 'to-kanji', 5400);
+    await log('ancient', 'to-kanji', 2000); // not practiced today at all
+    expect(await getTodayStats(db, 4000)).toEqual({ newDone: 2, reviewsDone: 1 });
+    expect(await getTodayStats(db, 9000)).toEqual({ newDone: 0, reviewsDone: 0 });
   });
 
   it('is cleared completely by a reset', async () => {

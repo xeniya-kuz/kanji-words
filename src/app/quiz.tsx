@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View, type ScrollViewInstance } from 'react-native';
@@ -16,12 +16,21 @@ import type { KanjiData } from '@/core/quiz/kanji-data';
 import { buildQuestion, type Question } from '@/core/quiz/question';
 import { knownKanjiSet } from '@/core/quiz/known-kanji';
 import { changedKanji, kanjiOf, score, type AnswerRecord } from '@/core/quiz/session';
-import { selectSessionItems, type ProgressByDirection, type SessionItem } from '@/core/quiz/srs';
+import {
+  askableIn,
+  buildQueue,
+  directionsOf,
+  EXTRA_PRACTICE_SIZE,
+  selectExtraItems,
+  type ProgressByDirection,
+  type SessionItem,
+} from '@/core/quiz/srs';
 import type { Settings } from '@/core/settings';
+import { startOfDay } from '@/core/stats';
 import { JapaneseFont, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useKanjiData } from '@/db/kanji-db';
 import { listNotes } from '@/db/notes';
-import { getProgressMap, recordAnswer } from '@/db/progress';
+import { getProgressMap, getTodayStats, recordAnswer } from '@/db/progress';
 import { getUserFrames, getUserKanji } from '@/db/user-kanji';
 import { useTheme } from '@/hooks/use-theme';
 import { getSettings } from '@/state/settings';
@@ -37,6 +46,8 @@ interface Session {
   totalWords: number;
   /** Words in the decks turned on, to tell "all decks turned off" from "nothing to ask this way". */
   selectedWords: number;
+  /** Questions that can be asked in the chosen direction, to tell "nothing to ask this way" from "done for today". */
+  askableWords: number;
 }
 
 interface Prepared {
@@ -86,6 +97,8 @@ export default function QuizScreen() {
   const theme = useTheme();
   const scroll = useRef<ScrollViewInstance>(null);
   const prepared = useRef(new Map<number, Promise<Prepared>>());
+  // "Practice ahead" from the home screen: words that aren't due yet instead of today's queue.
+  const ahead = useLocalSearchParams<{ extra?: string }>().extra === '1';
 
   const [session, setSession] = useState<Session | null>(null);
   const [index, setIndex] = useState(0);
@@ -108,15 +121,27 @@ export default function QuizScreen() {
       'to-kanji': await getProgressMap(db, 'to-kanji'),
       'to-reading': await getProgressMap(db, 'to-reading'),
     };
+    const now = Date.now();
+    const items = ahead
+      ? selectExtraItems(notes, progress, settings.direction, EXTRA_PRACTICE_SIZE, now)
+      : buildQueue(
+          notes,
+          progress,
+          settings.direction,
+          { newPerDay: settings.newPerDay, reviewsPerDay: settings.reviewsPerDay },
+          await getTodayStats(db, startOfDay(now)),
+          now,
+        ).items;
     return {
-      items: selectSessionItems(notes, progress, settings.direction, settings.sessionSize, Date.now()),
+      items,
       deckWords,
       known,
       settings,
       totalWords: all.length,
       selectedWords: notes.length,
+      askableWords: directionsOf(settings.direction).reduce((sum, d) => sum + askableIn(notes, d).length, 0),
     };
-  }, [db, data]);
+  }, [db, data, ahead]);
 
   useEffect(() => {
     let active = true;
@@ -190,7 +215,11 @@ export default function QuizScreen() {
             ? 'No words yet. Import a word list first.'
             : session.selectedWords === 0
               ? 'All decks are turned off. Choose decks to practice in Settings.'
-              : 'None of the selected words can be asked this way: reading questions need a word with kanji and a hiragana reading.'}
+              : session.askableWords === 0
+                ? 'None of the selected words can be asked this way: reading questions need a word with kanji and a hiragana reading.'
+                : ahead
+                  ? 'No started words to practice ahead.'
+                  : 'Done for today! New words and reviews come back tomorrow, or raise the daily limits in Settings.'}
         </ThemedText>
         <Button title="Back" variant="secondary" onPress={() => router.back()} />
       </Centered>

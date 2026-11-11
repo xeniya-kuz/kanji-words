@@ -10,7 +10,7 @@ import { Screen } from '@/components/screen';
 import { Segmented } from '@/components/segmented';
 import { ThemedText } from '@/components/themed-text';
 import { backupSummary, createBackup, type Backup } from '@/core/backup';
-import { MAX_COURSE_LIMIT, SESSION_SIZES, type Settings } from '@/core/settings';
+import { MAX_COURSE_LIMIT, MAX_DAILY_LIMIT, type Settings } from '@/core/settings';
 import { Spacing } from '@/constants/theme';
 import { readBackupContent, restoreBackup } from '@/db/backup';
 import { deleteAllNotes, getDeckSummaries } from '@/db/notes';
@@ -133,11 +133,19 @@ export default function SettingsScreen() {
           />
         </Section>
 
-        <Section title="Words per session">
-          <Segmented
-            options={SESSION_SIZES.map((n) => ({ value: n, label: String(n) }))}
-            value={settings.sessionSize}
-            onChange={(sessionSize) => updateSettings({ sessionSize })}
+        <Section
+          title="New words per day"
+          hint="How many words you have never seen are introduced each day. Once reached, only due words are left.">
+          <Stepper value={settings.newPerDay} step={5} onChange={(newPerDay) => updateSettings({ newPerDay })} />
+        </Section>
+
+        <Section
+          title="Maximum reviews per day"
+          hint="How many words you already started can come back each day. Missed words always come back.">
+          <Stepper
+            value={settings.reviewsPerDay}
+            step={50}
+            onChange={(reviewsPerDay) => updateSettings({ reviewsPerDay })}
           />
         </Section>
 
@@ -280,6 +288,34 @@ export default function SettingsScreen() {
         </Section>
       </ScrollView>
     </Screen>
+  );
+}
+
+/** A whole number with −/+ buttons and a field to type it in. */
+function Stepper({ value, step, onChange }: { value: number; step: number; onChange: (value: number) => void }) {
+  const theme = useTheme();
+  // What is being typed; null when the field just shows the saved value.
+  const [draft, setDraft] = useState<string | null>(null);
+
+  const commit = (n: number) => {
+    onChange(Math.min(MAX_DAILY_LIMIT, Math.max(0, Math.round(n))));
+    setDraft(null);
+  };
+
+  return (
+    <View style={styles.limitRow}>
+      <Button title={`−${step}`} variant="secondary" onPress={() => commit(value - step)} />
+      <View style={styles.limitField}>
+        <TextInput
+          value={draft ?? String(value)}
+          onChangeText={setDraft}
+          onEndEditing={() => commit(draft === null || draft.trim() === '' ? value : Number(draft))}
+          keyboardType="number-pad"
+          style={[styles.limitInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+        />
+      </View>
+      <Button title={`+${step}`} variant="secondary" onPress={() => commit(value + step)} />
+    </View>
   );
 }
 

@@ -2,7 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import type { WordNote } from '@/core/import/import-words';
 import type { Direction } from '@/core/quiz/session';
-import { schedule, type Progress } from '@/core/quiz/srs';
+import { schedule, type Progress, type TodayStats } from '@/core/quiz/srs';
 
 interface ProgressRow {
   note_id: string;
@@ -90,6 +90,22 @@ export async function answerTotals(db: SQLiteDatabase, since = 0, direction?: Di
     direction ?? null,
   );
   return { total: row?.total ?? 0, correct: row?.correct ?? 0 };
+}
+
+/**
+ * Questions practiced since a time (the start of today), taken from the answer history: a word whose very first
+ * answer is in the period was new, one answered earlier is a review. A word counts once per direction.
+ */
+export async function getTodayStats(db: SQLiteDatabase, since: number): Promise<TodayStats> {
+  const row = await db.getFirstAsync<{ new_done: number | null; reviews_done: number | null }>(
+    `SELECT SUM(first >= ?) AS new_done, SUM(first < ?) AS reviews_done FROM (
+       SELECT MIN(answered_at) AS first, MAX(answered_at) AS last FROM answer_log GROUP BY note_id, direction
+     ) WHERE last >= ?`,
+    since,
+    since,
+    since,
+  );
+  return { newDone: row?.new_done ?? 0, reviewsDone: row?.reviews_done ?? 0 };
 }
 
 export async function answerTimestamps(db: SQLiteDatabase, since: number): Promise<number[]> {

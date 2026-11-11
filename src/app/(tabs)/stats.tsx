@@ -9,7 +9,7 @@ import { Segmented } from '@/components/segmented';
 import { ThemedText } from '@/components/themed-text';
 import { DIRECTIONS, type Direction } from '@/core/quiz/session';
 import { askableIn, LEARNED_BOX, MAX_BOX } from '@/core/quiz/srs';
-import { accuracy, dayKey, streakDays } from '@/core/stats';
+import { accuracy, dayKey, startOfDay, streakDays } from '@/core/stats';
 import { DIRECTION_LABEL } from '@/constants/directions';
 import { Spacing } from '@/constants/theme';
 import { listNotes } from '@/db/notes';
@@ -53,7 +53,7 @@ export default function StatsScreen() {
     const days = new Set((await answerTimestamps(db, now - 400 * DAY)).map(dayKey));
     return {
       streak: streakDays(days, now),
-      today: await answerTotals(db, new Date(new Date(now).setHours(0, 0, 0, 0)).getTime()),
+      today: await answerTotals(db, startOfDay(now)),
       by: {
         'to-kanji': await directionStats(db, 'to-kanji', now),
         'to-reading': await directionStats(db, 'to-reading', now),

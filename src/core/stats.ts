@@ -4,6 +4,11 @@ export function dayKey(timestamp: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+/** Local midnight at the start of the day of a timestamp. */
+export function startOfDay(timestamp: number): number {
+  return new Date(timestamp).setHours(0, 0, 0, 0);
+}
+
 /**
  * Consecutive days with practice, ending today (or yesterday, so the streak isn't lost
  * before you practice today).

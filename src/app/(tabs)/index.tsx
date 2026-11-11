@@ -9,10 +9,11 @@ import { Screen } from '@/components/screen';
 import { Segmented } from '@/components/segmented';
 import { ThemedText } from '@/components/themed-text';
 import type { DirectionMode } from '@/core/quiz/session';
-import { askableIn, directionsOf, modeCounts } from '@/core/quiz/srs';
+import { askableIn, directionsOf, EXTRA_PRACTICE_SIZE, modeCounts, selectExtraItems } from '@/core/quiz/srs';
+import { startOfDay } from '@/core/stats';
 import { Spacing } from '@/constants/theme';
 import { getDeckSummaries, listNotes } from '@/db/notes';
-import { getProgressMap } from '@/db/progress';
+import { getProgressMap, getTodayStats } from '@/db/progress';
 import { countUserKanji } from '@/db/user-kanji';
 import { useFocusQuery } from '@/hooks/use-focus-query';
 import { updateSettings, useSettings } from '@/state/settings';
@@ -28,17 +29,23 @@ export default function PracticeScreen() {
       'to-kanji': await getProgressMap(db, 'to-kanji'),
       'to-reading': await getProgressMap(db, 'to-reading'),
     };
+    const now = Date.now();
+    const limits = { newPerDay: settings.newPerDay, reviewsPerDay: settings.reviewsPerDay };
     return {
       decks: await getDeckSummaries(db),
-      counts: modeCounts(notes, progress, settings.direction, Date.now()),
+      counts: modeCounts(notes, progress, settings.direction, limits, await getTodayStats(db, startOfDay(now)), now),
+      // Started words that aren't due yet, for practicing ahead once today's queue is done.
+      ahead: selectExtraItems(notes, progress, settings.direction, EXTRA_PRACTICE_SIZE, now).length,
       // Questions available in the chosen direction, e.g. words without kanji can't be asked for their reading.
       selected: notes.length,
       practiced: directionsOf(settings.direction).reduce((sum, d) => sum + askableIn(notes, d).length, 0),
       kanjiCount: await countUserKanji(db),
     };
-  }, [db, settings.excludedDecks, settings.direction]);
+  }, [db, settings.excludedDecks, settings.direction, settings.newPerDay, settings.reviewsPerDay]);
   const { data } = useFocusQuery(query);
   const total = data?.decks.reduce((sum, d) => sum + d.count, 0) ?? 0;
+  const queued = data ? data.counts.due + data.counts.fresh : 0;
+  const unit = settings.direction === 'mixed' ? 'questions' : 'words';
 
   return (
     <Screen>
@@ -102,13 +109,26 @@ export default function PracticeScreen() {
               </ThemedText>
             </View>
 
-            <Button
-              title={`Start practice · ${Math.min(settings.sessionSize, data.practiced)} ${
-                settings.direction === 'mixed' ? 'questions' : 'words'
-              }`}
-              disabled={data.practiced === 0}
-              onPress={() => router.push('/quiz')}
-            />
+            {queued > 0 || data.practiced === 0 ? (
+              <Button
+                title={`Start practice · ${queued} ${unit}`}
+                disabled={queued === 0}
+                onPress={() => router.push('/quiz')}
+              />
+            ) : (
+              <>
+                <ThemedText themeColor="textSecondary" style={styles.modeHint}>
+                  Done for today. Change the daily limits in Settings to learn more.
+                </ThemedText>
+                {data.ahead > 0 && (
+                  <Button
+                    title={`Practice ahead · ${data.ahead} ${unit}`}
+                    variant="secondary"
+                    onPress={() => router.push({ pathname: '/quiz', params: { extra: '1' } })}
+                  />
+                )}
+              </>
+            )}
           </>
         )}
 

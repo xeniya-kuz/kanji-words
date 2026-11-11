@@ -13,7 +13,8 @@ import {
   generateReadingDistractors,
   pickReadingDistractors,
 } from '../reading-distractors';
-import { selectSessionItems, type ProgressByDirection } from '../srs';
+import type { DirectionMode } from '../session';
+import { buildQueue, type ProgressByDirection } from '../srs';
 
 const { DatabaseSync } = process.getBuiltinModule('node:sqlite') as typeof import('node:sqlite');
 const db = new DatabaseSync(path.join(__dirname, '../../../../assets/db/kanji.db'), { readOnly: true });
@@ -137,33 +138,38 @@ describe('canAskReading', () => {
   });
 });
 
-describe('selectSessionItems', () => {
+describe('buildQueue by direction', () => {
   const notes = [
     { id: '1', word: '学校', reading: 'がっこう' },
     { id: '2', word: '祖父', reading: 'そふ' },
     { id: '3', word: 'ありがとう', reading: 'ありがとう' },
   ];
   const empty: ProgressByDirection = { 'to-kanji': new Map(), 'to-reading': new Map() };
+  const today = { newDone: 0, reviewsDone: 0 };
+  const queue = (progress: ProgressByDirection, mode: DirectionMode, newPerDay = 10) =>
+    buildQueue(notes, progress, mode, { newPerDay, reviewsPerDay: 200 }, today, 0, seeded());
 
   it('skips words without kanji for reading questions only', () => {
-    const reading = selectSessionItems(notes, empty, 'to-reading', 10, 0, seeded());
-    expect(reading.map((i) => i.note.id).sort()).toEqual(['1', '2']);
-    const spelling = selectSessionItems(notes, empty, 'to-kanji', 10, 0, seeded());
-    expect(spelling.map((i) => i.note.id).sort()).toEqual(['1', '2', '3']);
+    expect(queue(empty, 'to-reading').items.map((i) => i.note.id).sort()).toEqual(['1', '2']);
+    expect(queue(empty, 'to-kanji').items.map((i) => i.note.id).sort()).toEqual(['1', '2', '3']);
   });
 
   it('mixes both directions without asking a word twice', () => {
-    const items = selectSessionItems(notes, empty, 'mixed', 10, 0, seeded());
+    const { items, fresh } = queue(empty, 'mixed');
     expect(new Set(items.map((i) => i.note.id)).size).toBe(items.length);
+    expect(items).toHaveLength(3);
+    expect(fresh).toBe(3);
+  });
+
+  it('shares the new word limit between the directions', () => {
+    expect(queue(empty, 'mixed', 2).items).toHaveLength(2);
   });
 
   it('schedules each direction on its own progress', () => {
     const learned = { noteId: '1', box: 3, dueAt: 10 ** 12, correct: 3, wrong: 0, lastSeen: 0 };
     const progress: ProgressByDirection = { 'to-kanji': new Map([['1', learned]]), 'to-reading': new Map() };
-    // Word 1 is not due for spelling, but new for reading, so reading comes first.
-    const reading = selectSessionItems(notes, progress, 'to-reading', 1, 0, seeded());
-    expect(reading).toHaveLength(1);
-    const spelling = selectSessionItems(notes, progress, 'to-kanji', 2, 0, seeded());
-    expect(spelling.map((i) => i.note.id)).not.toContain('1');
+    // Word 1 is not due for spelling, but new for reading.
+    expect(queue(progress, 'to-reading').items.map((i) => i.note.id)).toContain('1');
+    expect(queue(progress, 'to-kanji').items.map((i) => i.note.id)).not.toContain('1');
   });
 });
