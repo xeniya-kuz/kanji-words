@@ -8,7 +8,7 @@ import { ThemedText } from '@/components/themed-text';
 import { DIRECTIONS, type Direction } from '@/core/quiz/session';
 import { askableIn, LEARNED_BOX, type Progress } from '@/core/quiz/srs';
 import { DIRECTION_SHORT } from '@/constants/directions';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { listNotes } from '@/db/notes';
 import { getProgressMap } from '@/db/progress';
 import { useFocusQuery } from '@/hooks/use-focus-query';
@@ -49,13 +49,13 @@ export default function WordsScreen() {
         placeholder="Search word, reading or translation"
         placeholderTextColor={theme.textSecondary}
         autoCorrect={false}
-        style={[styles.search, { backgroundColor: theme.backgroundElement, color: theme.text }]}
+        style={[styles.search, { backgroundColor: theme.backgroundElement, borderColor: theme.border, color: theme.text }]}
       />
       <FlatList
         data={data?.notes ?? []}
         keyExtractor={(note) => note.id}
         contentContainerStyle={styles.list}
-        ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: theme.backgroundSelected }]} />}
+        ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: theme.border }]} />}
         ListEmptyComponent={
           data ? (
             <ThemedText themeColor="textSecondary">
@@ -98,9 +98,10 @@ export default function WordsScreen() {
 const styles = StyleSheet.create({
   screen: { paddingBottom: 0 },
   search: {
-    borderRadius: Spacing.three,
+    borderRadius: Radius.control,
+    borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
+    paddingVertical: Spacing.three,
     fontSize: 16,
   },
   list: { paddingBottom: Spacing.five },

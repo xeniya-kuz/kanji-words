@@ -5,7 +5,7 @@ import { Button } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import type { ColumnProfile } from '@/core/import/detect-columns';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 export const columnLabel = (p: ColumnProfile) => `Column ${p.index + 1}${p.name ? ` · ${p.name}` : ''}`;
@@ -30,7 +30,11 @@ export function ColumnPicker({ title, profiles, selected, optional, onSelect, on
       onPress={() => onSelect(value)}
       style={({ pressed }) => [
         styles.option,
-        { backgroundColor: active ? theme.backgroundSelected : theme.backgroundElement, opacity: pressed ? 0.7 : 1 },
+        {
+          backgroundColor: active ? theme.accentSoft : theme.backgroundElement,
+          borderColor: active ? theme.accent : theme.border,
+          opacity: pressed ? 0.7 : 1,
+        },
       ]}>
       <ThemedText type="smallBold">{label}</ThemedText>
       {samples.map((sample, i) => (
@@ -68,6 +72,6 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: Spacing.four, paddingVertical: Spacing.three },
   title: { fontSize: 24, lineHeight: 32 },
   list: { paddingHorizontal: Spacing.four, gap: Spacing.two, paddingBottom: Spacing.four },
-  option: { borderRadius: Spacing.three, padding: Spacing.three, gap: Spacing.half },
+  option: { borderRadius: Radius.card, borderWidth: 1.5, padding: Spacing.three, gap: Spacing.half },
   footer: { padding: Spacing.four },
 });

@@ -2,24 +2,35 @@ import { Platform } from 'react-native';
 
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
-    accent: '#3c6df0',
-    correct: '#1f9d55',
-    wrong: '#d64545',
+    text: '#0f1020',
+    background: '#f6f6fb',
+    backgroundElement: '#ffffff',
+    backgroundSelected: '#e6e7f2',
+    textSecondary: '#62647a',
+    accent: '#5b5bf0',
+    onAccent: '#ffffff',
+    accentSoft: '#e9e9fe',
+    border: '#e3e4ef',
+    correct: '#168a4f',
+    correctSoft: '#e1f5ea',
+    wrong: '#d6403f',
+    wrongSoft: '#fbe5e5',
   },
+  // Deep blue-black canvas with slightly lighter, hairline-bordered surfaces and a violet accent.
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
-    accent: '#7a9cff',
-    correct: '#3ccf7f',
-    wrong: '#ff6b6b',
+    text: '#f2f2f8',
+    background: '#09090f',
+    backgroundElement: '#14141d',
+    backgroundSelected: '#23232f',
+    textSecondary: '#9a9bb0',
+    accent: '#8b8cff',
+    onAccent: '#0b0b18',
+    accentSoft: '#22224a',
+    border: '#252533',
+    correct: '#4ade98',
+    correctSoft: '#11291f',
+    wrong: '#ff7a85',
+    wrongSoft: '#2e1519',
   },
 } as const;
 
@@ -47,6 +58,13 @@ export const Spacing = {
   four: 24,
   five: 32,
   six: 64,
+} as const;
+
+/** Corner radii: cards and big tiles, buttons and inputs, and small chips. */
+export const Radius = {
+  card: 20,
+  control: 16,
+  small: 10,
 } as const;
 
 export const MaxContentWidth = 800;

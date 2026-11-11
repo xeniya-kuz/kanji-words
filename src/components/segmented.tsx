@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 type SegmentedProps<T extends string | number> = {
@@ -14,7 +14,7 @@ type SegmentedProps<T extends string | number> = {
 export function Segmented<T extends string | number>({ options, value, onChange }: SegmentedProps<T>) {
   const theme = useTheme();
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
       {options.map((option) => {
         const selected = option.value === value;
         return (
@@ -23,8 +23,8 @@ export function Segmented<T extends string | number>({ options, value, onChange 
             accessibilityRole="button"
             accessibilityState={{ selected }}
             onPress={() => onChange(option.value)}
-            style={[styles.segment, { backgroundColor: selected ? theme.accent : theme.backgroundElement }]}>
-            <ThemedText type="smallBold" style={{ color: selected ? '#ffffff' : theme.text }}>
+            style={[styles.segment, selected && { backgroundColor: theme.accent }]}>
+            <ThemedText type="smallBold" style={{ color: selected ? theme.onAccent : theme.textSecondary }}>
               {option.label}
             </ThemedText>
           </Pressable>
@@ -35,11 +35,17 @@ export function Segmented<T extends string | number>({ options, value, onChange 
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', gap: Spacing.two },
+  row: {
+    flexDirection: 'row',
+    gap: Spacing.one,
+    padding: Spacing.one,
+    borderRadius: Radius.control + Spacing.one,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
   segment: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: Spacing.two,
-    borderRadius: Spacing.three,
+    paddingVertical: Spacing.two + Spacing.half,
+    borderRadius: Radius.control,
   },
 });

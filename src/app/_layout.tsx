@@ -5,11 +5,21 @@ import { SQLiteProvider } from 'expo-sqlite';
 import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
-import { JapaneseFont } from '@/constants/theme';
+import { Colors, JapaneseFont } from '@/constants/theme';
 import { KanjiDbProvider } from '@/db/kanji-db';
 import { APP_DB_NAME, migrateAppDb } from '@/db/schema';
 
 SplashScreen.preventAutoHideAsync();
+
+/** Navigation colors (headers, backgrounds) taken from the app palette so they match the screens. */
+function navigationTheme(scheme: 'light' | 'dark') {
+  const base = scheme === 'dark' ? DarkTheme : DefaultTheme;
+  const c = Colors[scheme];
+  return {
+    ...base,
+    colors: { ...base.colors, primary: c.accent, background: c.background, card: c.background, text: c.text, border: c.border },
+  };
+}
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -24,10 +34,10 @@ export default function RootLayout() {
   if (!ready) return null;
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={navigationTheme(colorScheme === 'dark' ? 'dark' : 'light')}>
       <KanjiDbProvider>
         <SQLiteProvider databaseName={APP_DB_NAME} onInit={migrateAppDb}>
-          <Stack>
+          <Stack screenOptions={{ headerShadowVisible: false }}>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="import" options={{ title: 'Import' }} />
             <Stack.Screen name="quiz" options={{ title: 'Practice' }} />

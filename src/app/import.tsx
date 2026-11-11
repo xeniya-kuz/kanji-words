@@ -25,7 +25,7 @@ import {
 } from '@/core/import/import-plan';
 import type { SkipReason } from '@/core/import/import-words';
 import { parseWordFile, type WordFile } from '@/core/import/word-file';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { loadSavedMappings, saveMappings } from '@/db/import-profiles';
 import { saveNotes } from '@/db/notes';
 import { replaceUserKanji } from '@/db/user-kanji';
@@ -219,7 +219,10 @@ export default function ImportScreen() {
                       onPress={() => setGroupIndex(i)}
                       style={[
                         styles.groupRow,
-                        { backgroundColor: i === groupIndex ? theme.backgroundSelected : theme.backgroundElement },
+                        {
+                          backgroundColor: i === groupIndex ? theme.accentSoft : theme.backgroundElement,
+                          borderColor: i === groupIndex ? theme.accent : theme.border,
+                        },
                       ]}>
                       <View style={styles.fill}>
                         <ThemedText type="smallBold">{g.noteType || 'Notes'}</ThemedText>
@@ -319,7 +322,8 @@ const styles = StyleSheet.create({
   groupRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: Spacing.three,
+    borderRadius: Radius.card,
+    borderWidth: 1.5,
     padding: Spacing.three,
     gap: Spacing.two,
   },

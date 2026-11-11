@@ -11,7 +11,7 @@ import { Segmented } from '@/components/segmented';
 import { ThemedText } from '@/components/themed-text';
 import { backupSummary, createBackup, type Backup } from '@/core/backup';
 import { MAX_COURSE_LIMIT, MAX_DAILY_LIMIT, type Settings } from '@/core/settings';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { readBackupContent, restoreBackup } from '@/db/backup';
 import { deleteAllNotes, getDeckSummaries } from '@/db/notes';
 import { resetProgress } from '@/db/progress';
@@ -184,7 +184,7 @@ export default function SettingsScreen() {
                     onChangeText={setLimitText}
                     onEndEditing={() => setLimit(parseInt(limitText, 10) || settings.courseLimit)}
                     keyboardType="number-pad"
-                    style={[styles.limitInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+                    style={[styles.limitInput, { color: theme.text, backgroundColor: theme.backgroundElement, borderColor: theme.border }]}
                   />
                 </View>
                 <Button title="+100" variant="secondary" onPress={() => setLimit(settings.courseLimit + 100)} />
@@ -224,6 +224,8 @@ export default function SettingsScreen() {
                   <Switch
                     value={!settings.excludedDecks.includes(d.deck)}
                     onValueChange={(on) => toggleDeck(d.deck, on)}
+                    trackColor={{ false: theme.backgroundSelected, true: theme.accent }}
+                    thumbColor="#ffffff"
                   />
                 </View>
               ))}
@@ -311,7 +313,7 @@ function Stepper({ value, step, onChange }: { value: number; step: number; onCha
           onChangeText={setDraft}
           onEndEditing={() => commit(draft === null || draft.trim() === '' ? value : Number(draft))}
           keyboardType="number-pad"
-          style={[styles.limitInput, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+          style={[styles.limitInput, { color: theme.text, backgroundColor: theme.backgroundElement, borderColor: theme.border }]}
         />
       </View>
       <Button title={`+${step}`} variant="secondary" onPress={() => commit(value + step)} />
@@ -343,8 +345,9 @@ const styles = StyleSheet.create({
     minWidth: 90,
     textAlign: 'center',
     fontSize: 18,
-    borderRadius: Spacing.two,
-    paddingVertical: Spacing.one,
+    borderRadius: Radius.control,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: Spacing.two,
   },
   deckRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
 });

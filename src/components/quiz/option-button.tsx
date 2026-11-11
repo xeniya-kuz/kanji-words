@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text } from 'react-native';
 
-import { JapaneseFont, Spacing } from '@/constants/theme';
+import { JapaneseFont, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 export type OptionState = 'idle' | 'correct' | 'wrong' | 'dimmed';
@@ -13,7 +13,9 @@ type OptionButtonProps = {
 
 export function OptionButton({ text, state, onPress }: OptionButtonProps) {
   const theme = useTheme();
-  const borderColor = state === 'correct' ? theme.correct : state === 'wrong' ? theme.wrong : 'transparent';
+  const borderColor = state === 'correct' ? theme.correct : state === 'wrong' ? theme.wrong : theme.border;
+  const backgroundColor =
+    state === 'correct' ? theme.correctSoft : state === 'wrong' ? theme.wrongSoft : theme.backgroundElement;
   // Long phrases get a smaller font so they stay on one line.
   const size = text.length > 7 ? 22 : text.length > 4 ? 28 : 34;
 
@@ -25,9 +27,9 @@ export function OptionButton({ text, state, onPress }: OptionButtonProps) {
       style={({ pressed }) => [
         styles.option,
         {
-          backgroundColor: theme.backgroundElement,
+          backgroundColor: pressed ? theme.backgroundSelected : backgroundColor,
           borderColor,
-          opacity: state === 'dimmed' ? 0.45 : pressed ? 0.7 : 1,
+          opacity: state === 'dimmed' ? 0.4 : 1,
         },
       ]}>
       <Text
@@ -43,8 +45,8 @@ export function OptionButton({ text, state, onPress }: OptionButtonProps) {
 const styles = StyleSheet.create({
   option: {
     minHeight: 72,
-    borderRadius: Spacing.three,
-    borderWidth: 3,
+    borderRadius: Radius.card,
+    borderWidth: 1.5,
     paddingHorizontal: Spacing.three,
     alignItems: 'center',
     justifyContent: 'center',

@@ -163,7 +163,7 @@ const styles = StyleSheet.create({
   content: { gap: Spacing.three, paddingBottom: Spacing.five },
   tiles: { flexDirection: 'row', justifyContent: 'space-around' },
   tile: { alignItems: 'center', flex: 1 },
-  bar: { flexDirection: 'row', height: 12, borderRadius: 6, overflow: 'hidden' },
+  bar: { flexDirection: 'row', height: 10, borderRadius: 5, overflow: 'hidden', gap: 2 },
   legend: { flexDirection: 'row', gap: Spacing.three, flexWrap: 'wrap' },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one },
   dot: { width: 10, height: 10, borderRadius: 5 },
