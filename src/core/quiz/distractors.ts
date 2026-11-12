@@ -14,8 +14,8 @@
 //
 // Difficulty decides which candidates are picked:
 //   easy    clearly different kanji the learner knows
-//   normal  look-alikes, same-reading kanji and real words, with some randomness
-//   hard    the most confusable: closest look-alikes, look-and-sound-alikes, real homophones
+//   normal  like hard, but with much more randomness, so the options vary from one session to the next
+//   hard    the most confusable: closest look-alikes (known or not), look-and-sound-alikes, real homophones
 
 import type { FuriganaSegment } from '../text/furigana';
 import { isKanji, toHiragana } from '../text/japanese';
@@ -106,6 +106,26 @@ function confusability(c: Draft): number {
       return 0.5;
     case 'different':
       return 0.05 * c.familiarity;
+  }
+}
+
+/**
+ * Confusability for "normal" and "hard" (they differ in how much randomness is added). The learner meets kanji outside their decks in real life, so an unfamiliar
+ * Jōyō look-alike (浴 → 沿) is barely less confusing than a known one, and a kanji that only shares the
+ * reading but looks nothing alike (浴び → 悪び) is easy to rule out, so looks count for much more than sound.
+ */
+function looksFirstConfusability(c: Draft): number {
+  const familiarity = c.familiarity >= FAMILIAR.known ? 1 : c.familiarity > FAMILIAR.rare ? 0.92 : 0.5;
+  switch (c.source) {
+    case 'look-alike':
+    case 'same-reading':
+      return Math.min(1, (c.looks + (c.sounds ? 0.2 : 0)) * familiarity);
+    case 'double':
+      return Math.min(1, (c.looks + (c.sounds ? 0.15 : 0)) * 0.9 * familiarity);
+    case 'homophone':
+      return (c.common ? 0.75 : 0.35) * familiarity + 0.15 * c.looks;
+    default:
+      return confusability(c);
   }
 }
 
@@ -253,11 +273,11 @@ export function pickDistractors(
     if (different.length >= count) pool = different;
     rank = (c) => (1 - c.looks) * c.familiarity * (0.6 + 0.8 * random());
   } else if (difficulty === 'hard') {
-    rank = (c) => c.score * (0.95 + 0.1 * random());
+    rank = (c) => looksFirstConfusability(c) * (0.95 + 0.1 * random());
   } else {
     const similarOnes = pool.filter((c) => c.source !== 'different');
     if (similarOnes.length >= count) pool = similarOnes;
-    rank = (c) => c.score * (0.6 + 0.8 * random());
+    rank = (c) => looksFirstConfusability(c) * (0.6 + 0.8 * random());
   }
   const ranks = new Map<Candidate, number>();
   const valueOf = (c: Candidate) => {

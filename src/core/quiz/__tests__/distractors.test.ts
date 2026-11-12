@@ -174,6 +174,20 @@ describe('pickDistractors', () => {
     }
   });
 
+  it('hard offers close look-alikes even when the learner has not met them, over kanji that only sound alike', async () => {
+    // 浴 (あ): 溶 容 沿 look alike but are not in `known`; 上 会 悪 … are known and read あ, yet look nothing alike.
+    const note = word('浴びる', 'あびる', '浴[あ]びる');
+    const seen = new Set<string>();
+    for (let seed = 1; seed <= 20; seed++) {
+      const picked = await pick(note, 'hard', seed);
+      for (const p of picked) {
+        expect(p.looks).toBeGreaterThanOrEqual(0.7); // 溶 容 沿 俗 欲, never 悪 or 上
+        seen.add(p.text);
+      }
+    }
+    expect(seen.has('沿びる')).toBe(true);
+  });
+
   it('makes easy clearly different and hard the most confusable', async () => {
     const average = async (difficulty: 'easy' | 'normal' | 'hard', key: 'looks' | 'score') => {
       let sum = 0;
